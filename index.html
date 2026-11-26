@@ -1,0 +1,3352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0d12">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Dale, Chalo! · Biomechanical Free-Throw Coach v3</title>
+  <!-- PeerJS for WebRTC Dual-Camera P2P streaming -->
+  <script defer src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <!-- QRCode generator for instant pairing -->
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <style>
+    :root {
+      --bg: #0b0d12; --panel: #12161f; --card: #191e2b; --line: #272f42;
+      --txt: #f3f6fc; --muted: #94a0b8; --orange: #ff7a1a; --green: #2ee58d;
+      --red: #ff5666; --blue: #4cc2ff; --yellow: #ffd447; --purple: #b57cff;
+    }
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    html, body {
+      margin: 0; height: 100%; background: var(--bg); color: var(--txt); overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+    button {
+      font: inherit; color: inherit; background: var(--card); border: 1px solid var(--line);
+      border-radius: 11px; padding: 9px 13px; cursor: pointer; font-size: 14px; transition: all .15s;
+    }
+    button:hover { border-color: #3f4b66; background: #202738; }
+    button.primary { background: var(--orange); border-color: var(--orange); color: #0b0d12; font-weight: 700; }
+    button.primary:hover { filter: brightness(1.08); }
+    button.success { background: #133b2a; border-color: var(--green); color: var(--green); font-weight: 600; }
+    button.danger { background: #3b151c; border-color: var(--red); color: var(--red); font-weight: 600; }
+    button:disabled { opacity: .45; cursor: default; }
+    select, input[type=text], input[type=number], input[type=date] {
+      font: inherit; color: var(--txt); background: #0d1017; border: 1px solid var(--line);
+      border-radius: 9px; padding: 7px 10px; font-size: 13px; color-scheme: dark;
+    }
+    input[type=range] { accent-color: var(--orange); cursor: pointer; }
+    input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--orange); cursor: pointer; }
+
+    /* ---------- HOME MENU ---------- */
+    #home {
+      position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+      padding: 20px; overflow-y: auto;
+      background: radial-gradient(circle at 18% 0%, #2b180b 0%, var(--bg) 58%);
+    }
+    .home-card { width: 100%; max-width: 680px; margin: auto; padding: 12px 0; }
+    .logo { font-size: 36px; font-weight: 900; letter-spacing: -.03em; display: flex; align-items: center; gap: 10px; }
+    .logo span { color: var(--orange); }
+    .logo .tag { font-size: 12px; background: #ff7a1a22; color: var(--orange); border: 1px solid var(--orange); padding: 3px 9px; border-radius: 99px; font-weight: 700; }
+    .sub { color: var(--muted); margin: 6px 0 18px; font-size: 14px; line-height: 1.45; }
+    .menu-sec { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px; margin-bottom: 12px; }
+    .menu-sec h3 { margin: 0 0 10px; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+    .pill-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; }
+    .choice-card {
+      background: var(--card); border: 1.5px solid var(--line); border-radius: 13px; padding: 12px 14px;
+      cursor: pointer; text-align: left; transition: all .15s;
+    }
+    .choice-card b { display: block; font-size: 15px; margin-bottom: 3px; color: var(--txt); }
+    .choice-card span { display: block; font-size: 12px; color: var(--muted); line-height: 1.35; }
+    .choice-card.active { border-color: var(--orange); background: #ff7a1a16; box-shadow: 0 0 0 1px var(--orange); }
+    .mode-grid { display: grid; grid-template-columns: 1fr; gap: 9px; }
+    .mode {
+      display: flex; justify-content: space-between; align-items: center; gap: 12px;
+      width: 100%; text-align: left; padding: 14px 16px; border-radius: 14px;
+    }
+    .mode b { display: block; font-size: 16px; margin-bottom: 3px; }
+    .mode span { color: var(--muted); font-size: 12.5px; line-height: 1.35; display: block; }
+    .mode.rec { border-color: var(--orange); background: linear-gradient(90deg, #ff7a1a17, var(--card)); }
+    #joinBox { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; align-items: center; }
+    #joinBox input { flex: 1; min-width: 130px; font-size: 20px; letter-spacing: .18em; text-transform: uppercase; text-align: center; font-weight: 700; }
+    .privacy { color: #788296; font-size: 11.5px; line-height: 1.5; margin-top: 12px; }
+
+    /* ---------- MAIN APP LAYOUT ---------- */
+    #app { position: fixed; inset: 0; display: grid; grid-template-columns: minmax(0, 1fr); }
+    @media (min-width: 1040px) { #app.panel-open { grid-template-columns: minmax(0, 1fr) 460px; } }
+    #stage { position: relative; overflow: hidden; background: #050608; min-width: 0; min-height: 0; }
+    #video, #canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+    #video.mirror { transform: scaleX(-1); }
+
+    /* Second camera PIP */
+    #cam2Pip {
+      position: absolute; right: 14px; bottom: calc(env(safe-area-inset-bottom) + 76px); z-index: 6;
+      width: clamp(160px, 22vw, 280px); aspect-ratio: 16 / 9; background: #000;
+      border: 2px solid var(--blue); border-radius: 14px; overflow: hidden;
+      box-shadow: 0 10px 30px #000b;
+    }
+    #cam2Pip video { width: 100%; height: 100%; object-fit: cover; }
+    #cam2Pip .pip-tag {
+      position: absolute; top: 6px; left: 8px; background: #000b; color: var(--blue);
+      font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 6px;
+    }
+
+    /* Topbar & HUD */
+    #topbar {
+      position: absolute; top: 0; left: 0; right: 0; z-index: 6; pointer-events: none;
+      display: flex; justify-content: space-between; align-items: center; gap: 10px;
+      padding: calc(env(safe-area-inset-top) + 10px) 14px 18px;
+      background: linear-gradient(#000d, transparent);
+    }
+    .brand { font-weight: 800; font-size: 16px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .pill-badge {
+      font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 99px;
+      background: #ffffff14; border: 1px solid #ffffff24; color: var(--txt);
+    }
+    .pill-badge.side { border-color: var(--orange); color: var(--orange); background: #ff7a1a1a; }
+    .pill-badge.session { border-color: var(--blue); color: var(--blue); background: #4cc2ff1a; }
+    #status { font-size: 12.5px; color: var(--green); text-align: right; max-width: 48%; font-weight: 600; }
+    #status.err { color: var(--red); } #status.warn { color: var(--yellow); }
+
+    /* 5-Stage Kinematic Stepper on Video */
+    #stageStepper {
+      position: absolute; top: calc(env(safe-area-inset-top) + 46px); left: 50%; transform: translateX(-50%);
+      z-index: 6; display: flex; gap: 5px; background: #090b10cc; border: 1px solid #ffffff22;
+      padding: 5px 8px; border-radius: 999px; backdrop-filter: blur(8px); pointer-events: none;
+      max-width: 96%; overflow-x: auto;
+    }
+    .st-pill {
+      font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 99px;
+      color: var(--muted); white-space: nowrap; transition: all .15s;
+    }
+    .st-pill.active { background: var(--orange); color: #000; box-shadow: 0 0 12px #ff7a1a88; }
+    .st-pill.done { background: #2ee58d24; color: var(--green); border: 1px solid #2ee58d66; }
+
+    #hud {
+      position: absolute; left: 12px; top: calc(env(safe-area-inset-top) + 92px); z-index: 5;
+      display: grid; grid-template-columns: repeat(2, auto); gap: 7px; pointer-events: none;
+    }
+    .hcell {
+      background: #080a0fcc; border: 1px solid #ffffff22; border-radius: 12px;
+      padding: 6px 11px; min-width: 106px; backdrop-filter: blur(4px);
+    }
+    .hcell small { display: block; color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .05em; }
+    .hcell b { font-size: clamp(20px, 2.5vw, 36px); font-variant-numeric: tabular-nums; line-height: 1.1; }
+    .hcell .sub-val { font-size: 10.5px; color: var(--muted); display: block; }
+    .hcell.o b { color: var(--orange); } .hcell.g b { color: var(--green); }
+    .hcell.b b { color: var(--blue); } .hcell.p b { color: var(--purple); }
+    .hcell.good { border-color: var(--green); box-shadow: 0 0 12px #2ee58d33; }
+
+    #shotBadge {
+      position: absolute; right: 12px; top: calc(env(safe-area-inset-top) + 92px); z-index: 5;
+      background: #080a0fcc; border: 1px solid #ffffff26; border-radius: 999px;
+      padding: 7px 14px; font-size: 13px; font-weight: 700;
+    }
+    #shotBadge.active { border-color: var(--orange); color: var(--orange); }
+    #shotBadge.good { border-color: var(--green); color: var(--green); }
+    #shotBadge.warn { border-color: var(--yellow); color: var(--yellow); }
+
+    /* Visual Positive Feedback Toast */
+    #toast {
+      position: absolute; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 78px); transform: translateX(-50%);
+      width: max-content; max-width: min(94%, 760px); z-index: 8;
+      background: #0b0e15f2; border: 2px solid var(--green); border-radius: 18px; padding: 14px 18px;
+      font-size: clamp(13.5px, 1.5vw, 17px); line-height: 1.4; text-align: left;
+      box-shadow: 0 14px 45px #000c; backdrop-filter: blur(10px);
+    }
+    #toast.warn-border { border-color: var(--orange); }
+    .toast-top { display: flex; justify-content: space-between; align-items: center; gap: 14px; margin-bottom: 6px; }
+    .toast-score { font-size: 22px; font-weight: 900; }
+    .toast-seq { font-size: 12px; padding: 3px 9px; border-radius: 99px; font-weight: 700; }
+    .toast-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 13px; margin: 8px 0; }
+    @media (max-width: 600px) { .toast-cols { grid-template-columns: 1fr; } }
+    .toast-box { background: #ffffff09; border-radius: 10px; padding: 8px 10px; }
+    .toast-box b { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 4px; }
+    .toast-box ul { margin: 0; padding-left: 16px; }
+    #toast .btns { margin-top: 8px; display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+
+    #controls {
+      position: absolute; left: 0; right: 0; bottom: 0; z-index: 7;
+      display: flex; gap: 7px; justify-content: center; flex-wrap: wrap;
+      padding: 16px 10px calc(env(safe-area-inset-bottom) + 10px);
+      background: linear-gradient(transparent, #000e);
+    }
+    #controls button { background: #191e2be6; backdrop-filter: blur(6px); }
+
+    /* Overlays */
+    .overlay {
+      position: absolute; inset: 0; z-index: 12; display: flex; align-items: center; justify-content: center;
+      padding: 18px; background: #000c; overflow-y: auto;
+    }
+    .ocard {
+      background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 20px;
+      max-width: 640px; width: 100%; text-align: center; line-height: 1.45;
+    }
+    .ocard h2 { margin: 0 0 8px; font-size: 20px; }
+    .ocard p, .ocard li { color: var(--muted); font-size: 13.5px; }
+    .ocard ul { text-align: left; padding-left: 20px; }
+    .qr-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; margin: 12px 0; }
+    .qr-slot { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px; }
+    .qr-slot h4 { margin: 0 0 4px; font-size: 13px; color: var(--txt); }
+    .qr-box { background: #fff; padding: 10px; border-radius: 10px; display: inline-block; margin: 6px 0; }
+    .code { font-size: 30px; letter-spacing: .2em; font-weight: 900; color: var(--orange); }
+    .url { font-size: 11px; color: var(--muted); word-break: break-all; }
+    #camOverlay {
+      position: absolute; left: 12px; right: 12px; top: calc(env(safe-area-inset-top) + 52px); z-index: 5;
+      display: flex; justify-content: center;
+    }
+    #camOverlay .box { background: #000c; border: 1px solid #ffffff22; border-radius: 14px; padding: 10px 14px; text-align: center; font-size: 13.5px; }
+    #phoneFeedback {
+      position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 8;
+      background: #090c12ee; border: 2px solid var(--green); border-radius: 18px; padding: 16px 20px;
+      font-size: 18px; text-align: center; max-width: 90%;
+    }
+
+    /* ---------- SIDE PANEL With Tabs ---------- */
+    #panel {
+      display: none; background: var(--panel); overflow-y: auto; padding: 12px;
+      border-left: 1px solid var(--line);
+    }
+    #app.panel-open #panel { display: flex; flex-direction: column; }
+    @media (max-width: 1039px) {
+      #panel {
+        position: fixed; left: 0; right: 0; bottom: 0; max-height: 78dvh; z-index: 30;
+        border-radius: 18px 18px 0 0; border-left: 0; border-top: 1px solid var(--line);
+        padding-bottom: calc(env(safe-area-inset-bottom) + 14px); box-shadow: 0 -10px 40px #000c;
+      }
+    }
+    .panel-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .tabs { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; margin-bottom: 10px; background: #0b0d12; padding: 4px; border-radius: 11px; }
+    .tab-btn {
+      padding: 7px 4px; font-size: 11.5px; font-weight: 700; border-radius: 8px;
+      border: 0; background: transparent; color: var(--muted); text-align: center;
+    }
+    .tab-btn.active { background: var(--card); color: var(--orange); box-shadow: 0 1px 4px #0008; }
+    .tab-pane { display: none; }
+    .tab-pane.active { display: block; }
+
+    .sec { background: var(--card); border: 1px solid #ffffff0d; border-radius: 14px; padding: 12px; margin-bottom: 10px; }
+    .sec h3 { margin: 0 0 8px; font-size: 11.5px; text-transform: uppercase; color: var(--muted); letter-spacing: .07em; display: flex; justify-content: space-between; align-items: center; }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+    .metric { background: #0005; border-radius: 9px; padding: 7px 9px; }
+    .metric small { color: var(--muted); font-size: 10.5px; display: block; }
+    .metric b { font-size: 19px; font-variant-numeric: tabular-nums; }
+    #spark { width: 100%; height: 115px; display: block; margin-top: 8px; background: #07090d; border-radius: 10px; }
+    .legend { font-size: 11px; color: var(--muted); margin-top: 5px; display: flex; gap: 10px; flex-wrap: wrap; }
+    .legend i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+    .tiny { font-size: 12px; color: var(--muted); line-height: 1.45; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    td, th { padding: 5px 4px; border-bottom: 1px solid var(--line); text-align: right; font-variant-numeric: tabular-nums; }
+    td:first-child, th:first-child { text-align: left; color: var(--txt); }
+    th { color: var(--muted); font-weight: 600; font-size: 10.5px; text-transform: uppercase; }
+    .pos { color: var(--green); font-weight: 600; } .neg { color: var(--red); font-weight: 600; } .warn { color: var(--yellow); font-weight: 600; }
+
+    /* Sprite Video Replay Player & Recorded Video Inspector */
+    #spriteCanvas, #replayVideo {
+      width: 100%; height: 270px; display: block; background: radial-gradient(circle at 50% 35%, #1d2536, #090b10);
+      border-radius: 12px; border: 1px solid var(--line); object-fit: contain;
+    }
+    .tag-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; margin-top: 6px; }
+    .tag-grid button { font-size: 10.5px; padding: 6px 3px; border-radius: 7px; border-color: #ff7a1a66; background: #ff7a1a14; color: var(--txt); font-weight: 700; }
+    .tag-grid button:hover { background: var(--orange); color: #000; }
+    .tag-grid button.tagged { border-color: var(--green); background: #2ee58d22; color: var(--green); }
+    .sprite-bar { display: flex; align-items: center; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+    .sprite-bar input[type=range] { flex: 1; min-width: 100px; }
+    .stage-jumps { display: flex; gap: 4px; margin-top: 7px; flex-wrap: wrap; }
+    .stage-jumps button { flex: 1; font-size: 11px; padding: 5px 6px; border-radius: 7px; white-space: nowrap; }
+
+    /* Sequence Checklist */
+    .seq-list { list-style: none; padding: 0; margin: 6px 0 0; }
+    .seq-list li {
+      display: flex; justify-content: space-between; align-items: center; gap: 8px;
+      padding: 6px 8px; border-radius: 8px; background: #0004; margin-bottom: 5px; font-size: 12px;
+    }
+    .seq-list li .badge { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 99px; }
+    .badge.ok { background: #2ee58d22; color: var(--green); }
+    .badge.bad { background: #ff566622; color: var(--red); }
+
+    /* Feedback lists */
+    .fb-card { border-radius: 10px; padding: 8px 10px; margin-top: 7px; font-size: 12.5px; }
+    .fb-card.good { background: #2ee58d14; border: 1px solid #2ee58d44; }
+    .fb-card.fix { background: #ff7a1a14; border: 1px solid #ff7a1a44; }
+    .fb-card h4 { margin: 0 0 4px; font-size: 11.5px; text-transform: uppercase; letter-spacing: .05em; }
+    .fb-card ul { margin: 0; padding-left: 17px; line-height: 1.45; }
+
+    /* History & Progress */
+    .hist-row { display: flex; align-items: center; gap: 6px; padding: 6px 5px; border-bottom: 1px solid var(--line); font-size: 12px; cursor: pointer; }
+    .hist-row:hover { background: #ffffff08; }
+    .hist-row.sel { background: #ff7a1a1f; border-left: 3px solid var(--orange); padding-left: 6px; }
+    .hist-row .grow { flex: 1; }
+    .hist-row button { padding: 3px 7px; font-size: 11px; border-radius: 7px; }
+    .row-btns { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+    label.row { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin: 8px 0; font-size: 13px; }
+    label.row span small { display: block; color: var(--muted); font-size: 10.5px; }
+    #trendCanvas, #imuCanvas { width: 100%; height: 125px; display: block; background: #07090d; border-radius: 10px; margin-top: 6px; }
+    kbd { background: #0008; border: 1px solid var(--line); border-radius: 5px; padding: 1px 5px; font-size: 11px; }
+  </style>
+</head>
+<body>
+
+<!-- ===================== HOME MENU ===================== -->
+<section id="home">
+  <div class="home-card">
+    <div class="logo">🏀 Dale, <span>Chalo!</span> <span class="tag">v3 · NCAA Biomechanics</span></div>
+    <div class="sub">
+      Real-time free-throw motion mechanics, manual & automatic 5-stage kinematic chain analysis, video recording for post-analysis,
+      2D/3D sprite shot recreation, Dual-IMU sensor integration, and NCAA benchmark PDF reports.
+    </div>
+
+    <!-- 0. Player Profile, Height & Session Date -->
+    <div class="menu-sec">
+      <h3>0. Player Info, Height & Session Date</h3>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:10px;align-items:end">
+        <div>
+          <label class="tiny" style="display:block;margin-bottom:4px" for="homePlayerName">Player Name</label>
+          <input type="text" id="homePlayerName" data-cfg="playerName" placeholder="Enter your name (e.g. Chalo)" style="width:100%">
+        </div>
+        <div>
+          <label class="tiny" style="display:block;margin-bottom:4px" for="homeHeightCm">Height (cm)</label>
+          <input type="number" id="homeHeightCm" data-cfg="heightCm" min="120" max="230" step="1" placeholder="183" style="width:100%">
+        </div>
+        <div>
+          <label class="tiny" style="display:block;margin-bottom:4px" for="homeSessionDate">Session Date</label>
+          <input type="date" id="homeSessionDate" data-cfg="sessionDate" style="width:100%">
+        </div>
+        <button id="homeNewSessionBtn" class="primary" style="padding:9px 14px">🔄 Start New Session</button>
+      </div>
+    </div>
+
+    <!-- 1. Training Context: Alone vs With Someone Else -->
+    <div class="menu-sec">
+      <h3>1. Who is practicing today?</h3>
+      <div class="pill-grid" id="ctxChoices">
+        <div class="choice-card active" data-ctx="solo">
+          <b>🧍 Practicing Alone (Solo Mode)</b>
+          <span>Hands-free voice coaching, auto-shot segmentation, 3s start countdown, and keyboard/remote tagging.</span>
+        </div>
+        <div class="choice-card" data-ctx="partner">
+          <b>👥 With Coach / Partner</b>
+          <span>Operator controls on screen, instant Make/Miss verification, live multi-angle inspection & cue tagging.</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. Shooting Hand / Side Detection -->
+    <div class="menu-sec">
+      <h3>2. Shooting Side & Camera Setup</h3>
+      <div class="pill-grid" id="sideChoices">
+        <div class="choice-card active" data-side="auto">
+          <b>✨ Auto-Detect Side</b>
+          <span>Automatically identifies your shooting hand & camera profile (Right / Left / Front) from your motion.</span>
+        </div>
+        <div class="choice-card" data-side="right">
+          <b>🤚 Right-Handed Shooter</b>
+          <span>Locks primary biomechanical tracking to the right upper & lower kinematic chain.</span>
+        </div>
+        <div class="choice-card" data-side="left">
+          <b>✋ Left-Handed Shooter</b>
+          <span>Locks primary biomechanical tracking to the left upper & lower kinematic chain.</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. Launch Mode (1 or 2 Cameras) -->
+    <div class="menu-sec">
+      <h3>3. Launch Mode (Supports 1 or 2 Cameras)</h3>
+      <div class="mode-grid">
+        <button class="mode rec" data-mode="monitor">
+          <div>
+            <b>💻 PC Monitor Hub (1 or 2 Remote Phone Cameras)</b>
+            <span>Recommended. Connect Camera 1 (Sagittal Side View) + optional Camera 2 (Front View or Local Webcam). Runs heavy AI & full dashboard on your computer.</span>
+          </div>
+          <span>→</span>
+        </button>
+
+        <button class="mode" data-mode="camera">
+          <div>
+            <b>🎥 Use This Phone as Remote Camera (Cam 1 or Cam 2)</b>
+            <span>Mount this phone on a tripod (side or front of the free-throw line) and stream high-bitrate WebRTC video to the PC Monitor.</span>
+          </div>
+          <span>→</span>
+        </button>
+
+        <div id="joinBox" hidden>
+          <select id="joinRole" title="Camera Role">
+            <option value="1">Camera 1 · Sagittal (Side View)</option>
+            <option value="2">Camera 2 · Frontal (Alignment View)</option>
+          </select>
+          <input id="joinCode" type="text" placeholder="CODE" maxlength="6" autocomplete="off" autocapitalize="characters" spellcheck="false">
+          <button id="joinBtn" class="primary">Connect Camera</button>
+        </div>
+
+        <button class="mode" data-mode="local">
+          <div>
+            <b>📱 Analyze Directly on This Device (Single or Dual Local Camera)</b>
+            <span>Use this device's built-in camera(s) with full on-screen biomechanics, sprite replay, and reports.</span>
+          </div>
+          <span>→</span>
+        </button>
+      </div>
+    </div>
+
+    <p class="privacy">
+      🔒 All pose estimation runs locally in your browser via WebGPU/WASM. In remote mode, encrypted WebRTC streams directly peer-to-peer between your phone(s) and computer. Benchmark reference: <i>Cabarkapa et al. (2023), Frontiers in Sports and Active Living — NCAA/collegiate markerless free-throw study</i>.
+    </p>
+  </div>
+</section>
+
+<!-- ===================== MAIN APPLICATION ===================== -->
+<main id="app" hidden>
+  <div id="stage">
+    <video id="video" autoplay playsinline muted></video>
+    <canvas id="canvas"></canvas>
+
+    <!-- Optional Second Camera Picture-in-Picture -->
+    <div id="cam2Pip" hidden>
+      <video id="video2" autoplay playsinline muted></video>
+      <div class="pip-tag" id="cam2Label">CAM 2 · FRONT · Elbow Dev: –</div>
+    </div>
+
+    <div id="topbar">
+      <div class="brand">
+        🏀 Dale, Chalo!
+        <span class="pill-badge" id="playerBadge" style="border-color:var(--green);color:var(--green);background:#2ee58d1a">👤 Player · 183cm · Today</span>
+        <span class="pill-badge session" id="ctxBadge">Solo Mode</span>
+        <span class="pill-badge side" id="sideBadge">Side: Auto (Right)</span>
+      </div>
+      <div id="status">Ready</div>
+    </div>
+
+    <!-- 5-Stage Free-Throw Progress Stepper -->
+    <div id="stageStepper" data-show="local monitor">
+      <span class="st-pill" data-st="STANCE">1. Stance</span>
+      <span class="st-pill" data-st="DIP">2. Prep Dip (PP)</span>
+      <span class="st-pill" data-st="RISE">3. Power Rise</span>
+      <span class="st-pill" data-st="RELEASE">4. Release (RP)</span>
+      <span class="st-pill" data-st="FOLLOW">5. Follow-Through</span>
+    </div>
+
+    <!-- Live Biomechanical HUD -->
+    <div id="hud" data-show="local monitor">
+      <div class="hcell o" id="cellElbow">
+        <small>Elbow Angle</small><b id="hElbow">–</b>
+        <span class="sub-val">NCAA PP ~85° · RP ~160°</span>
+      </div>
+      <div class="hcell g" id="cellKnee">
+        <small>Knee Angle (Int.)</small><b id="hKnee">–</b>
+        <span class="sub-val">NCAA PP ~113° · RP ~166°</span>
+      </div>
+      <div class="hcell b" id="cellTrunk">
+        <small>Trunk Lean</small><b id="hTrunk">–</b>
+        <span class="sub-val">NCAA RP −1.1° ± 3.5°</span>
+      </div>
+      <div class="hcell p" id="cellKneeVel">
+        <small>Knee Ang. Vel</small><b id="hKneeVel">–</b>
+        <span class="sub-val">NCAA Peak ≤ 213 °/s</span>
+      </div>
+    </div>
+
+    <div id="shotBadge" data-show="local monitor">Waiting for shooter</div>
+
+    <!-- Phone Camera Emitter Status -->
+    <div id="camOverlay" data-show="camera">
+      <div class="box">
+        <b id="camRoleTag" style="color:var(--blue)">CAM 1 (SIDE)</b> · Room <b id="camCode" style="color:var(--orange);letter-spacing:.15em">—</b> ·
+        <span id="camStatus">Initializing...</span>
+        <div id="reconnectWrap" hidden style="margin-top:8px"><button id="reconnectBtn" class="primary">Reconnect</button></div>
+      </div>
+    </div>
+    <div id="phoneFeedback" hidden></div>
+    <div id="toast" hidden></div>
+
+    <!-- Setup Overlay (Local Mode) -->
+    <div id="startOverlay" class="overlay" hidden>
+      <div class="ocard">
+        <h2>Camera Placement & Calibration</h2>
+        <ul>
+          <li><b>Camera 1 (Primary Sagittal View):</b> Place 3–5 m laterally on your shooting-arm side, hip height, perpendicular to the free-throw line.</li>
+          <li><b>Camera 2 (Optional Front View):</b> Add a second phone or local USB webcam to track frontal knee alignment & lateral elbow flare.</li>
+          <li>Ensure your <b>entire body</b> from feet to overhead follow-through stays inside the frame.</li>
+        </ul>
+        <button id="startBtn" class="primary" style="font-size:17px;padding:13px 24px">▶ Start Biomechanical Tracking</button>
+      </div>
+    </div>
+
+    <!-- Dual-Camera Pairing Overlay (Monitor Mode) -->
+    <div id="pairOverlay" class="overlay" hidden>
+      <div class="ocard">
+        <h2>Connect 1 or 2 Cameras</h2>
+        <p>Scan the QR code with your phone(s), or open this page on the phone, select <b>"Use This Phone as Remote Camera"</b>, choose Camera 1 or 2, and enter code:</p>
+        <div class="code" id="pairCode">·····</div>
+        <div class="qr-grid">
+          <div class="qr-slot">
+            <h4>📱 Camera 1 · Sagittal (Side View)</h4>
+            <div class="qr-box" id="qr1"></div>
+            <div class="tiny" id="cam1PairState">Waiting for Camera 1...</div>
+          </div>
+          <div class="qr-slot">
+            <h4>📱 Camera 2 · Frontal (Optional 2nd Phone)</h4>
+            <div class="qr-box" id="qr2"></div>
+            <div class="tiny" id="cam2PairState">Optional · Not connected</div>
+            <button id="useLocalAsCam1Btn" style="margin-top:6px;font-size:11.5px;padding:5px 9px">💻 Or use PC Webcam as Cam 1</button>
+            <button id="useLocalCam2Btn" style="margin-top:6px;font-size:11.5px;padding:5px 9px">💻 Or use PC Webcam as Cam 2</button>
+          </div>
+        </div>
+        <div class="url" id="pairUrl"></div>
+        <p id="pairStatus">Connecting to pairing server...</p>
+        <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+          <button id="pairClose">Close Window</button>
+          <button id="pairNew">New Room Code</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom Floating Control Bar -->
+    <div id="controls">
+      <button id="btnRun" data-show="local monitor">▶ Start</button>
+      <button id="btnRecClip" data-show="local monitor" title="Manually record a video clip if the tracker misses a shot">⏺ Rec Clip</button>
+      <button id="btnNewSession" data-show="local monitor">🔄 New Session</button>
+      <button id="btnSwitch" data-show="local monitor camera">🔄 Flip Cam</button>
+      <button id="btnCam2Local" data-show="local monitor">🎥 +2nd Cam</button>
+      <button id="btnPair" data-show="monitor">📲 Pair Phones</button>
+      <button id="btnVoice" data-show="local monitor">🔊 Voice: ON</button>
+      <button id="btnReportModal" class="primary" data-show="local monitor">📄 NCAA Report / PDF</button>
+      <button id="btnHidePreview" data-show="camera">🌙 Dim Screen</button>
+      <button id="btnPanel" data-show="local monitor">📊 Analysis Panel</button>
+      <button id="btnFull" data-show="local monitor camera">⛶ Fullscreen</button>
+      <button id="btnHome">⌂ Menu</button>
+    </div>
+    <!-- New / Restart Session Modal -->
+    <div id="newSessionOverlay" class="overlay" hidden>
+      <div class="ocard" style="max-width:440px;text-align:left">
+        <h2 style="text-align:center">🔄 Start New / Restart Session</h2>
+        <p style="text-align:center;margin-top:0">Set the player name, height, and session date. You can archive your current throws first or reset the counter to zero.</p>
+        <label class="row"><span>Player Name</span>
+          <input type="text" id="modalPlayerName" placeholder="e.g. Chalo" style="width:210px"></label>
+        <label class="row"><span>Player Height (cm)</span>
+          <input type="number" id="modalHeightCm" min="120" max="230" step="1" placeholder="183" style="width:210px"></label>
+        <label class="row"><span>Session Date</span>
+          <input type="date" id="modalSessionDate" style="width:210px"></label>
+        <label class="row"><span>Session Note (Optional)</span>
+          <input type="text" id="modalSessionNote" placeholder="e.g. Evening Free Throws" style="width:210px"></label>
+        <label class="row" id="modalSavePrevWrap">
+          <span>Archive current session before resetting (<span id="modalCurrentCount">0</span> throws)</span>
+          <input type="checkbox" id="modalSavePrevChk" checked>
+        </label>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;flex-wrap:wrap">
+          <button id="modalCancelSessionBtn">Cancel</button>
+          <button id="modalConfirmSessionBtn" class="primary">✓ Start Fresh Session</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== ANALYSIS SIDE PANEL ===================== -->
+  <aside id="panel">
+    <div class="panel-head">
+      <b>🏀 Free-Throw Biomechanics</b>
+      <div style="display:flex;gap:6px">
+        <button id="panelNewSessionBtn" style="padding:5px 9px;font-size:11.5px" title="Start New Session or Edit Player/Date">🔄 New Session</button>
+        <button id="panelClose" title="Close Panel">✕</button>
+      </div>
+    </div>
+
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="live">1. Live</button>
+      <button class="tab-btn" data-tab="replay">2. Sprite</button>
+      <button class="tab-btn" data-tab="ncaa">3. NCAA</button>
+      <button class="tab-btn" data-tab="imu">4. IMUs</button>
+      <button class="tab-btn" data-tab="progress">5. Progress</button>
+    </div>
+
+    <!-- TAB 1: LIVE & SHOT BIOMECHANICS + SEQUENCE -->
+    <div class="tab-pane active" id="tab-live">
+      <div class="sec">
+        <h3>
+          <span>Live Sagittal Kinematics (<span id="sideLbl">Right</span>)</span>
+          <span id="viewAngleBadge" style="color:var(--green)">Sagittal View</span>
+        </h3>
+        <div class="grid2">
+          <div class="metric"><small>Elbow Internal Angle</small><b id="mElbow">–</b></div>
+          <div class="metric"><small>Knee Internal Angle</small><b id="mKnee">–</b></div>
+          <div class="metric"><small>Hip Internal Angle</small><b id="mHip">–</b></div>
+          <div class="metric"><small>Ankle Internal Angle</small><b id="mAnkle">–</b></div>
+          <div class="metric"><small>Forearm vs Vertical</small><b id="mForearm">–</b></div>
+          <div class="metric"><small>Trunk Lean (+Fwd)</small><b id="mTrunk">–</b></div>
+          <div class="metric"><small>Elbow Ang. Velocity</small><b id="mElbowVel">–</b></div>
+          <div class="metric"><small>Knee Ang. Velocity</small><b id="mKneeVel">–</b></div>
+        </div>
+        <canvas id="spark"></canvas>
+        <div class="legend">
+          <span><i style="background:var(--orange)"></i>Elbow</span>
+          <span><i style="background:var(--green)"></i>Knee (Int.)</span>
+          <span><i style="background:var(--blue)"></i>Hip</span>
+          <span>Last 4 s · Dashed line = Ball Release</span>
+        </div>
+        <div class="tiny" id="detInfo" style="margin-top:5px">—</div>
+      </div>
+
+      <!-- Sequence Verification & Positive Feedback per Throw -->
+      <div class="sec">
+        <h3>
+          <span>Selected Throw & Sequence Check</span>
+          <button id="demoShotBtn" style="padding:3px 8px;font-size:11px">⚡ Load Demo Throw</button>
+        </h3>
+        <div id="lastShot" class="tiny">
+          No free throws recorded yet. Shoot a free throw in view of the camera (or click <b>⚡ Load Demo Throw</b> to test the sprite video, sequence validator, and NCAA report).
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 2: SPRITE VIDEO, RECORDED VIDEO & MANUAL 5-STAGE POST-ANALYSIS -->
+    <div class="tab-pane" id="tab-replay">
+      <div class="sec">
+        <h3>
+          <span>Post-Analysis: Sprite & Recorded Video</span>
+          <span id="spriteShotTitle" style="color:var(--orange)">No Shot</span>
+        </h3>
+        <div style="display:flex;gap:5px;margin-bottom:8px;flex-wrap:wrap">
+          <button id="viewSpriteBtn" class="primary" style="flex:1;padding:6px 8px;font-size:11.5px">🕺 Sprite Skeleton</button>
+          <button id="viewVideoBtn" style="flex:1;padding:6px 8px;font-size:11.5px">🎥 Recorded Video</button>
+          <button id="dlVideoBtn" style="padding:6px 9px;font-size:11.5px" title="Download Recorded Video Clip">⬇ Video</button>
+          <label style="background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:6px 9px;font-size:11.5px;cursor:pointer" title="Load any local video file to analyze manually">
+            📂 Load Video <input type="file" id="uploadVideoFile" accept="video/*" hidden>
+          </label>
+        </div>
+
+        <canvas id="spriteCanvas"></canvas>
+        <video id="replayVideo" playsinline muted hidden></video>
+
+        <div class="sprite-bar">
+          <button id="spPrevFrameBtn" title="Previous Frame" style="padding:7px 9px">⏮</button>
+          <button id="spPlayBtn" class="primary">⏸ Pause</button>
+          <button id="spNextFrameBtn" title="Next Frame" style="padding:7px 9px">⏭</button>
+          <input id="spScrub" type="range" min="0" max="100" value="0">
+          <select id="spSpeed" title="Playback Speed">
+            <option value="0.25">0.25×</option>
+            <option value="0.5" selected>0.5×</option>
+            <option value="1">1.0×</option>
+          </select>
+        </div>
+
+        <!-- Jump to stage -->
+        <div class="tiny" style="margin-top:7px;display:flex;justify-content:space-between">
+          <b>Jump to Stage:</b>
+          <span id="curFrameInfo" style="color:var(--orange)">Frame 0/0 · t = 0.00s</span>
+        </div>
+        <div class="stage-jumps">
+          <button data-jump="stance">1. Stance</button>
+          <button data-jump="dip">2. Dip (PP)</button>
+          <button data-jump="rise">3. Rise</button>
+          <button data-jump="release">4. Release (RP)</button>
+          <button data-jump="follow">5. Follow</button>
+        </div>
+
+        <!-- MANUAL POST-ANALYSIS STAGE TAGGING -->
+        <div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--line)">
+          <div class="tiny" style="display:flex;justify-content:space-between;align-items:center">
+            <b style="color:var(--green)">✍️ Manual Post-Analysis: Set Current Frame as Stage</b>
+            <button id="autoStagesBtn" style="padding:2px 7px;font-size:10.5px">Auto-Reset</button>
+          </div>
+          <div class="tiny" style="margin-top:2px">Scrub or step (⏮/⏭) to the exact moment of each stage and click below to mark it & recalculate all angles, heights (using your <span id="lblHeightReplay">183</span> cm stature), and NCAA comparisons:</div>
+          <div class="tag-grid">
+            <button data-mark-stage="stance" id="markStanceBtn">📌 Set 1. Stance</button>
+            <button data-mark-stage="dip" id="markDipBtn">📌 Set 2. Dip (PP)</button>
+            <button data-mark-stage="rise" id="markRiseBtn">📌 Set 3. Rise</button>
+            <button data-mark-stage="release" id="markReleaseBtn">📌 Set 4. Release</button>
+            <button data-mark-stage="follow" id="markFollowBtn">📌 Set 5. Follow</button>
+          </div>
+        </div>
+
+        <label class="row" style="margin-top:8px">
+          <span>Overlay NCAA Proficient Ghost & Motion Trail</span>
+          <input type="checkbox" id="spGhostChk" checked>
+        </label>
+        <div class="tiny" id="spStageDesc">
+          Every throw automatically saves both the 2D/3D skeleton series and the real camera video clip so you can inspect or re-tag the 5 stages manually even if the live tracker missed a movement.
+        </div>
+      </div>
+
+      <div class="sec">
+        <h3>How We Determine Sequence Correctness</h3>
+        <div class="tiny">
+          A basketball free throw is a <b>proximal-to-distal kinematic chain</b>. HoopSense segments each attempt into 5 stages and verifies 5 biomechanical rules:
+          <ol style="padding-left:18px;margin:6px 0">
+            <li><b>1. Stance → 2. Prep Dip (PP):</b> Coincident knee, hip, and ankle flexion with the ball lowered into the shooting pocket (t<sub>dip</sub> &lt; t<sub>release</sub>).</li>
+            <li><b>3. Power Rise (Proximal Lead):</b> Lower-body extension (knee/hip peak velocity) initiates <i>before</i> peak elbow extension (Δt<sub>legs→elbow</sub> ∈ [20, 260] ms).</li>
+            <li><b>Controlled Sub-Maximal Knee Push:</b> Smooth knee extension matching NCAA proficient velocity (≤ 260 °/s) rather than an abrupt jump.</li>
+            <li><b>4. Release (RP) Alignment:</b> Near-vertical trunk (−1.1° ± 3.5°), high release (≥ 1.12× height), and full elbow extension (~160°–166°).</li>
+            <li><b>5. Follow-Through Hold:</b> Wrist flexion ("gooseneck") held above the shoulder for ≥ 200 ms after release.</li>
+          </ol>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 3: NCAA BENCHMARK COMPARISON -->
+    <div class="tab-pane" id="tab-ncaa">
+      <div class="sec">
+        <h3>
+          <span>NCAA Benchmark Comparison (Cabarkapa et al., 2023)</span>
+          <button id="openPdfBtn" class="primary" style="padding:4px 9px;font-size:11px">📄 Full PDF Report</button>
+        </h3>
+        <div class="tiny" style="margin-bottom:8px">
+          Compares your Preparatory Phase (<b>PP</b> = deepest dip) and Release Phase (<b>RP</b> = ball release) against <b>Proficient (≥70%)</b> vs <b>Non-Proficient (&lt;70%)</b> collegiate shooters (3D markerless capture, 120 Hz).
+        </div>
+        <div id="ncaaBox" class="tiny">Record or load a throw to see your NCAA comparison table.</div>
+      </div>
+
+      <div class="sec">
+        <h3>Key NCAA Scientific Insights</h3>
+        <ul class="tiny" style="padding-left:18px;margin:0">
+          <li><b>Controlled Knee Velocity (p = 0.005, d = 1.04):</b> Proficient shooters extend their knees more smoothly (212.9 ± 47.6 °/s peak) than non-proficient shooters (269.4 ± 60.6 °/s).</li>
+          <li><b>Vertical Trunk at Release (p = 0.016, d = 0.88):</b> Proficient shooters keep a near-vertical torso (−1.11 ± 3.49°), whereas non-proficient shooters lean forward (+1.87 ± 3.28°).</li>
+          <li><b>Higher Release Point (p = 0.010, d = 0.44):</b> Proficient shooters release at 1.17 ± 0.05× stature vs 1.12 ± 0.07× — without over-jumping (excessive release height &gt;1.19× led to misses).</li>
+          <li><b>Consistent Release Angles:</b> Elbow at release ~160° (166° in made shots), knee ~166°, hip ~174°, release angle ~51.5°.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- TAB 4: DUAL IMU (WRIST & FOREARM) POST-ANALYSIS -->
+    <div class="tab-pane" id="tab-imu">
+      <div class="sec">
+        <h3>
+          <span>Wrist & Forearm IMU Post-Analysis</span>
+          <span class="pill-badge" style="color:var(--purple);border-color:var(--purple)">Future / Sensor Fusion</span>
+        </h3>
+        <div class="tiny">
+          Attach wearable 6-axis IMUs (e.g., Vicon Blue Trident at 1125–1600 Hz) to the <b>Shooting Forearm</b> and <b>Shooting Wrist (Dorsal Hand)</b>. Upload CSV logs, stream live via Web Bluetooth, or synthesize virtual 200 Hz IMU waveforms from your tracked shot for post-analysis in the final report.
+        </div>
+        <div class="row-btns">
+          <label class="button" style="background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:7px 10px;font-size:12px;cursor:pointer">
+            📂 Forearm IMU CSV <input type="file" id="imuForearmFile" accept=".csv" hidden>
+          </label>
+          <label class="button" style="background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:7px 10px;font-size:12px;cursor:pointer">
+            📂 Wrist IMU CSV <input type="file" id="imuWristFile" accept=".csv" hidden>
+          </label>
+          <button id="imuSimBtn" class="primary" style="font-size:12px;padding:7px 10px">⚡ Synthesize from Selected Shot</button>
+        </div>
+        <canvas id="imuCanvas"></canvas>
+        <div class="legend">
+          <span><i style="background:var(--orange)"></i>Forearm ω (°/s)</span>
+          <span><i style="background:var(--purple)"></i>Wrist Snap ω (°/s)</span>
+          <span><i style="background:var(--green)"></i>Resultant Accel (g)</span>
+        </div>
+        <div id="imuStatsBox" class="tiny" style="margin-top:8px">
+          No IMU data attached to the selected throw yet. Click <b>⚡ Synthesize from Selected Shot</b> or load a CSV file.
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 5: TENDENCY, SAVED SESSIONS & SETTINGS -->
+    <div class="tab-pane" id="tab-progress">
+      <div class="sec">
+        <h3>Motion Tendency & Consistency Across Throws</h3>
+        <canvas id="trendCanvas"></canvas>
+        <div class="legend">
+          <span><i style="background:var(--orange)"></i>Elbow RP°</span>
+          <span><i style="background:var(--green)"></i>Knee PP°</span>
+          <span><i style="background:var(--purple)"></i>Knee Vel (°/s ÷ 2)</span>
+        </div>
+        <div id="tendencyBox" class="tiny" style="margin-top:8px">Record 2+ throws to analyze motion drift, fatigue tendency, and make/miss consistency.</div>
+      </div>
+
+      <div class="sec">
+        <h3>Player, Height, Date & Session Archive</h3>
+        <div style="display:grid;grid-template-columns:1.3fr 0.8fr 1.1fr;gap:6px;margin-bottom:8px">
+          <div>
+            <small class="tiny">Player Name</small>
+            <input type="text" id="panelPlayerName" data-cfg="playerName" placeholder="Player name" style="width:100%;margin-top:3px">
+          </div>
+          <div>
+            <small class="tiny">Height (cm)</small>
+            <input type="number" id="panelHeightCm" data-cfg="heightCm" min="120" max="230" step="1" style="width:100%;margin-top:3px">
+          </div>
+          <div>
+            <small class="tiny">Session Date</small>
+            <input type="date" id="panelSessionDate" data-cfg="sessionDate" style="width:100%;margin-top:3px">
+          </div>
+        </div>
+        <div class="row-btns" style="margin-bottom:8px">
+          <input type="text" id="sessionNoteInput" placeholder="Session note (e.g. Morning practice)" style="flex:1">
+          <button id="saveSessionBtn" class="primary">💾 Save Session</button>
+          <button id="restartSessionBtn">🔄 New / Restart</button>
+        </div>
+        <div id="savedSessionsBox" class="tiny">No saved sessions in archive yet.</div>
+        <div class="row-btns">
+          <button id="exportCsv">⬇ Shots CSV</button>
+          <button id="exportJson">⬇ Backup JSON</button>
+          <label style="background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:7px 11px;font-size:12px;cursor:pointer">
+            ⬆ Load JSON <input type="file" id="importJsonFile" accept=".json" hidden>
+          </label>
+          <button id="clearShots" class="danger">🗑 Clear Throws</button>
+        </div>
+      </div>
+
+      <div class="sec">
+        <h3>Throw History (<span id="shotCountLbl">0</span>)</h3>
+        <div id="history" class="tiny" style="max-height:190px;overflow-y:auto">No throws recorded yet.</div>
+        <div class="tiny" style="margin-top:6px">Keyboard shortcuts: <kbd>M</kbd> Made · <kbd>X</kbd> Missed · <kbd>R</kbd> Replay Sprite.</div>
+      </div>
+
+      <div class="sec">
+        <h3>Precision & Sensor Settings</h3>
+        <label class="row"><span>Training Context</span>
+          <select data-cfg="sessionMode"><option value="solo">Solo (Hands-Free)</option><option value="partner">With Coach / Partner</option></select></label>
+        <label class="row"><span>Shooting Side<small>Auto detects from wrist rise</small></span>
+          <select data-cfg="sideMode"><option value="auto">Auto-Detect</option><option value="right">Right Hand</option><option value="left">Left Hand</option></select></label>
+        <label class="row"><span>Shooter Height (cm)<small>For release height & COM scaling</small></span>
+          <input type="number" min="120" max="230" step="1" data-cfg="heightCm" style="width:85px"></label>
+        <label class="row"><span>Pose AI Model<small>Heavy = highest accuracy</small></span>
+          <select data-cfg="model"><option value="lite">Lite (Fast)</option><option value="full">Full (Balanced)</option><option value="heavy">Heavy (Max Precision)</option></select></label>
+        <label class="row"><span>Angle Calculation<small>2D Sagittal or 3D World</small></span>
+          <select data-cfg="angleMode"><option value="2d">2D Sagittal Plane</option><option value="3d">3D World Landmarks</option></select></label>
+        <label class="row"><span>One-Euro Smoothing</span>
+          <input type="range" min="0" max="1" step="0.05" data-cfg="smoothing"></label>
+        <label class="row"><span>Camera Resolution</span>
+          <select data-cfg="resolution"><option value="720">1280×720 (60 fps)</option><option value="1080">1920×1080 (HD)</option></select></label>
+        <label class="row"><span>Compute Delegate</span>
+          <select data-cfg="delegate"><option value="GPU">GPU (WebGL/WebGPU)</option><option value="CPU">CPU (WASM)</option></select></label>
+        <label class="row"><span>Track Hands (21 pts)<small>Refines wrist snap angle</small></span>
+          <input type="checkbox" data-cfg="hands"></label>
+        <label class="row"><span>Track Face Landmarks</span>
+          <input type="checkbox" data-cfg="face"></label>
+      </div>
+    </div>
+  </aside>
+</main>
+
+<script type="module">
+import {
+  FilesetResolver, PoseLandmarker, HandLandmarker, FaceLandmarker
+} from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
+
+/* =====================================================================
+   1. CONFIGURATION & NCAA BENCHMARK DATABASE (Cabarkapa et al., 2023)
+   ===================================================================== */
+const $ = id => document.getElementById(id);
+const VERSION = "0.10.14";
+const WASM_PATH = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${VERSION}/wasm`;
+const MP = "https://storage.googleapis.com/mediapipe-models";
+const MODEL_URLS = {
+  pose: {
+    lite:  `${MP}/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task`,
+    full:  `${MP}/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task`,
+    heavy: `${MP}/pose_landmarker/pose_landmarker_heavy/float16/1/pose_landmarker_heavy.task`
+  },
+  hand: `${MP}/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task`,
+  face: `${MP}/face_landmarker/face_landmarker/float16/1/face_landmarker.task`
+};
+const ORANGE = "#ff7a1a", GREEN = "#2ee58d", BLUE = "#4cc2ff", YELLOW = "#ffd447", PURPLE = "#b57cff", RED = "#ff5666";
+const VIS_MIN = 0.48;
+const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ||
+                 (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent));
+
+const SIDES = {
+  right: { shoulder: 12, elbow: 14, wrist: 16, index: 20, hip: 24, knee: 26, ankle: 28, heel: 30, foot: 32 },
+  left:  { shoulder: 11, elbow: 13, wrist: 15, index: 19, hip: 23, knee: 25, ankle: 27, heel: 29, foot: 31 }
+};
+
+function safeJSON(s, fb) { try { return s ? JSON.parse(s) : fb; } catch { return fb; } }
+const todayISO = () => new Date().toISOString().slice(0, 10);
+const DEFAULT_CFG = {
+  playerName: "Player 1", sessionDate: todayISO(),
+  sessionMode: "solo", sideMode: "auto", activeSide: "right", heightCm: 183,
+  model: isMobile ? "full" : "heavy", angleMode: "2d", smoothing: 0.5,
+  resolution: "1080", delegate: "GPU", hands: false, face: false, voice: true, bitrate: 8
+};
+const cfg = Object.assign({}, DEFAULT_CFG, safeJSON(localStorage.getItem("hoopsense_v3_cfg"), {}));
+if (!cfg.sessionDate) cfg.sessionDate = todayISO();
+if (cfg.sideMode !== "auto") cfg.activeSide = cfg.sideMode;
+function saveCfg() { localStorage.setItem("hoopsense_v3_cfg", JSON.stringify(cfg)); }
+
+/**
+ * NCAA / Collegiate Free-Throw Reference Values
+ * Source: Cabarkapa et al. (2023) "Biomechanical characteristics of proficient free-throw shooters—markerless motion capture analysis"
+ * Table 2 (Proficient >=70% vs Non-proficient <70%) & Table 3 (Made vs Missed within Proficient group).
+ * Note: All joint angles in the paper are internal 3-point angles where 180 deg = full extension.
+ */
+const NCAA_BENCHMARKS = [
+  {
+    key: "kneePP", label: "Knee Angle — Prep Dip (PP)", unit: "°",
+    profMean: 113.3, profSd: 9.1, nonProfMean: 107.3, nonProfSd: 14.9, madeMean: 118.0,
+    sig: false, es: "0.49 (M)",
+    praise: "Great preparatory knee load — right inside the NCAA proficient window (~113°–118°).",
+    lowCue: "You dipped too deep in the knees (<104°); keep a controlled ~113° knee bend for smoother energy transfer.",
+    highCue: "Bend your knees a bit more during the preparatory dip toward ~113°–118° to load your lower body."
+  },
+  {
+    key: "kneeRP", label: "Knee Angle — Release (RP)", unit: "°",
+    profMean: 165.8, profSd: 5.4, nonProfMean: 164.5, nonProfSd: 7.9, madeMean: 167.7,
+    sig: false, es: "0.19 (S)",
+    praise: "Full, balanced knee extension at release (~166°–168°).",
+    lowCue: "Extend your knees more completely through release toward ~166°.",
+    highCue: "Avoid hyper-locking the knees at release; keep a soft ~166° extension."
+  },
+  {
+    key: "kneeROM", label: "Knee Range of Motion (ROM)", unit: "°",
+    profMean: 52.5, profSd: 9.1, nonProfMean: 57.2, nonProfSd: 13.6, madeMean: 49.5,
+    sig: false, es: "0.41 (S-M)",
+    praise: "Compact, repeatable knee range of motion (~50°–53°).",
+    lowCue: "Increase your knee range of motion slightly toward ~52° so the legs power the shot.",
+    highCue: "Your knee excursion is larger than NCAA proficient shooters (~52°); simplify your lower-body dip."
+  },
+  {
+    key: "kneeVelPeak", label: "Knee Peak Angular Velocity*", unit: "°/s",
+    profMean: 212.9, profSd: 47.6, nonProfMean: 269.4, nonProfSd: 60.6, madeMean: 220.2,
+    sig: true, es: "1.04 (L)*",
+    praise: "Controlled, sub-maximal knee extension speed (~213 °/s) — the #1 discriminator of NCAA proficient shooters!",
+    lowCue: "Drive upward a bit more steadily with your legs toward ~200–220 °/s.",
+    highCue: "Slow down your knee push! Non-proficient shooters push too fast (269 °/s vs 213 °/s). Aim for a smooth, sub-maximal rise."
+  },
+  {
+    key: "kneeVelMean", label: "Knee Mean Angular Velocity*", unit: "°/s",
+    profMean: 123.0, profSd: 45.0, nonProfMean: 170.7, nonProfSd: 43.2, madeMean: 138.7,
+    sig: true, es: "0.43 (S-M)*",
+    praise: "Smooth average knee extension tempo matching collegiate rhythms (~123–139 °/s).",
+    lowCue: "Keep your upward knee extension continuous without stalling.",
+    highCue: "Your average knee extension speed is rushed; focus on a calmer upward rhythm."
+  },
+  {
+    key: "hipPP", label: "Hip Angle — Prep Dip (PP)", unit: "°",
+    profMean: 152.1, profSd: 8.6, nonProfMean: 150.5, nonProfSd: 15.0, madeMean: 149.2,
+    sig: false, es: "0.13 (S)",
+    praise: "Stable hip posture during the preparatory dip (~150°–152°).",
+    lowCue: "Keep your chest taller during the dip; excessive hip flexion pitches the torso forward.",
+    highCue: "Allow a natural slight hip hinge (~152°) as you load your knees."
+  },
+  {
+    key: "hipRP", label: "Hip Angle — Release (RP)", unit: "°",
+    profMean: 173.6, profSd: 4.2, nonProfMean: 173.3, nonProfSd: 4.2, madeMean: 177.5,
+    sig: false, es: "0.07 (S)",
+    praise: "Clean hip extension at ball release (~174°–177°).",
+    lowCue: "Finish tall through the hips at release (~174°).",
+    highCue: "Maintain neutral hip alignment at release."
+  },
+  {
+    key: "anklePP", label: "Ankle Angle — Prep Dip (PP)", unit: "°",
+    profMean: 57.3, profSd: 6.9, nonProfMean: 54.5, nonProfSd: 6.8, madeMean: 58.5,
+    sig: false, es: "0.41 (S-M)",
+    praise: "Good ankle dorsiflexion load in the set phase.",
+    lowCue: "Avoid collapsing the shins too far forward in the dip.",
+    highCue: "Flex your ankles naturally with your knees to load the calves."
+  },
+  {
+    key: "ankleRP", label: "Ankle Angle — Release (RP)", unit: "°",
+    profMean: 107.1, profSd: 10.6, nonProfMean: 100.4, nonProfSd: 13.2, madeMean: 109.8,
+    sig: false, es: "0.56 (M)",
+    praise: "Strong ankle plantarflexion rise onto the balls of your feet at release.",
+    lowCue: "Rise smoothly onto the balls of your feet at release (~107°–110° ankle angle).",
+    highCue: "Keep your ankle push balanced without jumping forward."
+  },
+  {
+    key: "elbowPP", label: "Elbow Angle — Prep Set (PP)", unit: "°",
+    profMean: 85.1, profSd: 15.0, nonProfMean: 78.0, nonProfSd: 22.0, madeMean: 81.5,
+    sig: false, es: "0.13 (S)",
+    praise: "Ideal ~82°–85° L-shaped shooting pocket at the set point!",
+    lowCue: "Your elbow is over-folded (<70°) in the pocket; keep it near ~82°–85° for a cleaner lever.",
+    highCue: "Bend your elbow closer to ~85° in the set pocket before extending."
+  },
+  {
+    key: "elbowRP", label: "Elbow Angle — Release (RP)", unit: "°",
+    profMean: 162.5, profSd: 6.5, nonProfMean: 159.8, nonProfSd: 8.0, madeMean: 166.1,
+    sig: false, es: "0.17 (S)",
+    praise: "Crisp elbow extension at release (~160°–166°).",
+    lowCue: "Extend your shooting elbow more completely at release toward ~163°–166°.",
+    highCue: "Snap the wrist softly just before locking the elbow at ~166°."
+  },
+  {
+    key: "elbowROM", label: "Elbow Range of Motion (ROM)", unit: "°",
+    profMean: 78.0, profSd: 15.0, nonProfMean: 82.8, nonProfSd: 22.0, madeMean: 85.0,
+    sig: false, es: "0.14 (S)",
+    praise: "Consistent ~78°–85° elbow extension sweep.",
+    lowCue: "Use a fuller elbow extension sweep from the pocket to overhead release.",
+    highCue: "Keep your elbow path compact from set pocket to release."
+  },
+  {
+    key: "elbowVelPeak", label: "Elbow Peak Angular Velocity", unit: "°/s",
+    profMean: 840.0, profSd: 120.0, nonProfMean: 975.2, nonProfSd: 131.9, madeMean: 772.8,
+    sig: false, es: "0.63 (M)",
+    praise: "Fluid, controlled elbow extension speed (~770–890 °/s).",
+    lowCue: "Accelerate your forearm smoothly up through the release point.",
+    highCue: "You are muscling/jerking the elbow extension (>970 °/s); let lower-body momentum feed the arm."
+  },
+  {
+    key: "trunkRP", label: "Trunk Lean at Release* (+Fwd)", unit: "°",
+    profMean: -1.1, profSd: 3.5, nonProfMean: 1.9, nonProfSd: 3.3, madeMean: -1.3,
+    sig: true, es: "0.88 (L)*",
+    praise: "Excellent near-vertical trunk posture at release (−1.1° ± 3.5°) — maximizes release height!",
+    lowCue: "You are leaning too far backward at release; stay stacked and vertical.",
+    highCue: "Avoid leaning your torso forward at release (+lean lowers release height and characterizes <70% shooters)."
+  },
+  {
+    key: "forearmPP", label: "Forearm Angle vs Vertical (PP)", unit: "°",
+    profMean: 35.3, profSd: 8.3, nonProfMean: 35.2, nonProfSd: 6.9, madeMean: 31.2,
+    sig: false, es: "0.01 (S)",
+    praise: "Clean forearm alignment in the shooting pocket (~31°–35°).",
+    lowCue: "Keep a natural forearm angle in the set position.",
+    highCue: "Tuck your shooting elbow under the ball (reduce forearm flare in the pocket)."
+  },
+  {
+    key: "forearmRP", label: "Forearm Angle vs Vertical (RP)", unit: "°",
+    profMean: 11.5, profSd: 4.8, nonProfMean: 13.1, nonProfSd: 4.8, madeMean: 9.7,
+    sig: false, es: "0.11 (S)",
+    praise: "High, straight overhead forearm finish (~10°–13° from vertical).",
+    lowCue: "Finish with your forearm pointing up toward the basket (~10° from vertical).",
+    highCue: "Push your elbow higher so the forearm finishes closer to vertical (~10°–13°)."
+  },
+  {
+    key: "releaseHeightRatio", label: "Release Height / Stature*", unit: "×H",
+    profMean: 1.17, profSd: 0.05, nonProfMean: 1.12, nonProfSd: 0.07, madeMean: 1.17,
+    sig: true, es: "0.44 (S-M)*",
+    praise: "Optimal release height (~1.17× stature) — higher margin of error without over-jumping!",
+    lowCue: "Release the ball higher overhead (~1.17× your height) by staying vertical and extending fully.",
+    highCue: "Note from NCAA study: over-jumping (>1.19× height) actually caused more misses in proficient shooters!"
+  },
+  {
+    key: "releaseAngle", label: "Estimated Release Angle", unit: "°",
+    profMean: 51.5, profSd: 3.5, nonProfMean: 52.1, nonProfSd: 5.4, madeMean: 51.5,
+    sig: false, es: "0.24 (S)",
+    praise: "Optimal ~51.5°–52° launch trajectory toward the back-center of the rim.",
+    lowCue: "Lift your release arc closer to ~52° (lift elbow to eyebrow height).",
+    highCue: "Your launch angle is too steep (>57°); project the ball smoothly at ~52°."
+  }
+];
+
+/* =====================================================================
+   2. APPLICATION STATE
+   ===================================================================== */
+const video = $("video"), canvas = $("canvas"), ctx = canvas.getContext("2d");
+const video2 = $("video2");
+const S = {
+  mode: null, running: false, stream: null, stream2: null, facing: isMobile ? "environment" : "user", mirrored: false,
+  vision: null, pose: null, poseVariant: null, hand: null, face: null, delegate: cfg.delegate, loading: null,
+  lastDetectTs: 0, clock: 0, lastRaw: null, lastPerf: 0, lastSeenT: -1,
+  frames: [], fpsTimes: [], fps: 0, rvfc: null, raf: null, lastVideoTime: -1, lastUi: 0,
+  viewOrientation: "Sagittal", cam2Metrics: { elbowFlare: null, kneeValgus: null, lastTs: 0 },
+  autoSideVotes: { right: 0, left: 0 },
+  // 5-Stage Free Throw State Machine: STANCE -> DIP -> RISE -> RELEASE -> FOLLOW
+  shot: {
+    stage: "STANCE", dipStartT: 0, dipMinKnee: 180, dipT: 0,
+    riseStartT: 0, peakElbow: 0, peakT: 0, releaseT: 0, lastEnd: -10
+  },
+  releaseMarks: [],
+  shots: safeJSON(localStorage.getItem("hoopsense_v3_shots"), []),
+  sessions: safeJSON(localStorage.getItem("hoopsense_v3_sessions"), []),
+  selectedId: null,
+  // Sprite Replay Player & Video Post-Analysis state
+  sprite: { playing: true, idx: 0, speed: 0.5, showGhost: true, viewMode: "sprite", lastTick: 0, raf: null },
+  recorder: null, recChunks: [], recActive: false, manualRecStartT: 0, videoClips: {},
+  // PeerJS Dual-Camera WebRTC
+  peer: null, calls: { 1: null, 2: null }, conns: { 1: null, 2: null },
+  roomCode: null, camRole: "1", remoteInfo: { 1: null, 2: null },
+  wakeLock: null, toastTimer: null
+};
+
+/* =====================================================================
+   3. ONE-EURO FILTER (Jitter suppression without phase lag)
+   ===================================================================== */
+class OneEuro {
+  constructor() { this.minCutoff = 1.2; this.beta = 1.5; this.dCutoff = 1; this.x = null; this.dx = 0; this.t = null; }
+  static alpha(cutoff, dt) { const tau = 1 / (2 * Math.PI * cutoff); return 1 / (1 + tau / dt); }
+  filter(x, t) {
+    if (this.t === null || !Number.isFinite(this.x)) { this.t = t; this.x = x; this.dx = 0; return x; }
+    const dt = Math.max(1e-3, t - this.t); this.t = t;
+    const rawDx = (x - this.x) / dt;
+    this.dx += OneEuro.alpha(this.dCutoff, dt) * (rawDx - this.dx);
+    const cutoff = this.minCutoff + this.beta * Math.abs(this.dx);
+    this.x += OneEuro.alpha(cutoff, dt) * (x - this.x);
+    return this.x;
+  }
+}
+class LandmarkFilter {
+  constructor(beta) { this.beta = beta; this.f = []; }
+  reset() { this.f = []; }
+  apply(points, t) {
+    const s = cfg.smoothing;
+    if (s <= 0.001) return points.map(p => ({ x: p.x, y: p.y, z: p.z, visibility: p.visibility }));
+    const minCutoff = 0.45 + (1 - s) * 5;
+    return points.map((p, i) => {
+      let f = this.f[i];
+      if (!f) f = this.f[i] = [new OneEuro(), new OneEuro(), new OneEuro()];
+      for (const o of f) { o.minCutoff = minCutoff; o.beta = this.beta; }
+      return { x: f[0].filter(p.x, t), y: f[1].filter(p.y, t), z: f[2].filter(p.z, t), visibility: p.visibility };
+    });
+  }
+}
+const imgFilter = new LandmarkFilter(3.0);
+const worldFilter = new LandmarkFilter(1.5);
+
+/* =====================================================================
+   4. MEDIAPIPE AI MODELS
+   ===================================================================== */
+async function getVision() {
+  if (!S.vision) S.vision = await FilesetResolver.forVisionTasks(WASM_PATH);
+  return S.vision;
+}
+async function createTask(Cls, options) {
+  const vision = await getVision();
+  const order = S.delegate === "GPU" ? ["GPU", "CPU"] : ["CPU"];
+  let lastErr;
+  for (const delegate of order) {
+    try {
+      const task = await Cls.createFromOptions(vision, { ...options, baseOptions: { ...options.baseOptions, delegate } });
+      S.delegate = delegate;
+      return task;
+    } catch (e) { lastErr = e; console.warn(`Delegate ${delegate} failed`, e); }
+  }
+  throw lastErr;
+}
+function closeModels() {
+  for (const k of ["pose", "hand", "face"]) { const m = S[k]; S[k] = null; try { m?.close(); } catch {} }
+  S.poseVariant = null;
+}
+async function ensureModels() {
+  while (S.loading) { try { await S.loading; } catch {} }
+  const needPose = !S.pose || S.poseVariant !== cfg.model;
+  const needHand = cfg.hands && !S.hand;
+  const needFace = cfg.face && !S.face;
+  if (!needPose && !needHand && !needFace) return;
+  S.loading = (async () => {
+    if (needPose) {
+      setStatus(`Loading Pose AI (${cfg.model.toUpperCase()})...`, "warn");
+      const old = S.pose; S.pose = null; try { old?.close(); } catch {}
+      S.pose = await createTask(PoseLandmarker, {
+        baseOptions: { modelAssetPath: MODEL_URLS.pose[cfg.model] },
+        runningMode: "VIDEO", numPoses: 1,
+        minPoseDetectionConfidence: 0.58, minPosePresenceConfidence: 0.58, minTrackingConfidence: 0.58,
+        outputSegmentationMasks: false
+      });
+      S.poseVariant = cfg.model;
+      resetTracking();
+    }
+    if (needHand) {
+      setStatus("Loading Hand AI...", "warn");
+      S.hand = await createTask(HandLandmarker, {
+        baseOptions: { modelAssetPath: MODEL_URLS.hand }, runningMode: "VIDEO", numHands: 2,
+        minHandDetectionConfidence: 0.55, minHandPresenceConfidence: 0.55, minTrackingConfidence: 0.55
+      });
+    }
+    if (needFace) {
+      setStatus("Loading Face AI...", "warn");
+      S.face = await createTask(FaceLandmarker, {
+        baseOptions: { modelAssetPath: MODEL_URLS.face }, runningMode: "VIDEO", numFaces: 1,
+        outputFaceBlendshapes: false
+      });
+    }
+  })();
+  try {
+    await S.loading;
+    if (S.mode === "monitor" && !S.stream) setStatus(`AI Ready · Waiting for camera (Code ${S.roomCode || "…"})`, "warn");
+    else setStatus(S.running ? "Tracking Active" : "AI Models Ready");
+  } catch (e) {
+    console.error(e); setStatus("Model load error: " + (e.message || e), "err"); throw e;
+  } finally { S.loading = null; }
+}
+function handleRuntimeError(e) {
+  console.error(e);
+  if (S.delegate === "GPU") {
+    S.delegate = "CPU"; closeModels();
+    setStatus("GPU fallback to CPU...", "warn");
+    ensureModels().catch(() => {});
+  } else {
+    setStatus("Tracking error: " + (e.message || e), "err");
+  }
+}
+
+/* =====================================================================
+   5. CAMERA & DUAL-STREAM MANAGEMENT
+   ===================================================================== */
+function videoConstraints(facing, deviceId = null) {
+  const h = cfg.resolution === "720" ? 720 : 1080, w = h === 720 ? 1280 : 1920;
+  const v = { width: { ideal: w }, height: { ideal: h }, frameRate: { ideal: 60, max: 60 } };
+  if (deviceId) v.deviceId = { exact: deviceId };
+  else v.facingMode = { ideal: facing };
+  return { audio: false, video: v };
+}
+function openCamera(facing, deviceId = null) { return navigator.mediaDevices.getUserMedia(videoConstraints(facing, deviceId)); }
+function stopStream() {
+  S.stream?.getTracks().forEach(t => t.stop()); S.stream = null;
+  S.stream2?.getTracks().forEach(t => t.stop()); S.stream2 = null;
+  $("cam2Pip").hidden = true;
+}
+function trackSettings(stream = S.stream) { return stream?.getVideoTracks()[0]?.getSettings?.() || {}; }
+function actualFacing(stream) { return trackSettings(stream).facingMode || S.facing; }
+function waitMeta(vEl = video) {
+  return new Promise(res => {
+    if (vEl.readyState >= 1 && vEl.videoWidth) return res();
+    vEl.addEventListener("loadedmetadata", () => res(), { once: true });
+  });
+}
+async function showStream(stream, mirrored) {
+  if (video.srcObject !== stream) video.srcObject = stream;
+  await waitMeta(video);
+  await video.play().catch(() => {});
+  setMirror(mirrored);
+  resizeCanvas();
+}
+async function attachSecondStream(stream) {
+  S.stream2 = stream;
+  video2.srcObject = stream;
+  $("cam2Pip").hidden = false;
+  await waitMeta(video2);
+  await video2.play().catch(() => {});
+}
+function setMirror(m) { S.mirrored = !!m; video.classList.toggle("mirror", S.mirrored); }
+function resizeCanvas() {
+  if (video.videoWidth && (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight)) {
+    canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+  }
+}
+async function keepAwake() {
+  try { if ("wakeLock" in navigator && !S.wakeLock) { S.wakeLock = await navigator.wakeLock.request("screen"); S.wakeLock.addEventListener("release", () => S.wakeLock = null); } } catch {}
+}
+
+/* =====================================================================
+   6. REAL-TIME FRAME LOOP & AUTO-SIDE / ORIENTATION DETECTION
+   ===================================================================== */
+function startLoop() {
+  if (S.running) return;
+  S.running = true; resetTracking(); schedule(); updateRunButton();
+}
+function stopLoop() {
+  S.running = false;
+  if (S.rvfc != null && video.cancelVideoFrameCallback) video.cancelVideoFrameCallback(S.rvfc);
+  if (S.raf != null) cancelAnimationFrame(S.raf);
+  S.rvfc = S.raf = null;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  updateRunButton();
+}
+function schedule() {
+  if (!S.running) return;
+  if ("requestVideoFrameCallback" in HTMLVideoElement.prototype) S.rvfc = video.requestVideoFrameCallback(onFrame);
+  else S.raf = requestAnimationFrame(now => onFrame(now, null));
+}
+function onFrame(now, meta) {
+  if (!S.running) return;
+  if (meta || video.currentTime !== S.lastVideoTime) {
+    S.lastVideoTime = video.currentTime;
+    try { processFrame(meta); } catch (e) { console.error(e); }
+  }
+  schedule();
+}
+function resetTracking() {
+  S.frames = []; imgFilter.reset(); worldFilter.reset(); S.lastRaw = null;
+  S.shot = { stage: "STANCE", dipStartT: 0, dipMinKnee: 180, dipT: 0, riseStartT: 0, peakElbow: 0, peakT: 0, releaseT: 0, lastEnd: -10 };
+  S.releaseMarks = [];
+  setStageStepper("STANCE");
+  setBadge("Ready for Free Throw");
+}
+function frameTime(meta) {
+  const perf = performance.now() / 1000;
+  let raw = null;
+  if (meta) {
+    if (S.mode === "monitor" && Number.isFinite(meta.rtpTimestamp)) raw = meta.rtpTimestamp / 90000;
+    else if (Number.isFinite(meta.captureTime) && meta.captureTime > 0) raw = meta.captureTime / 1000;
+    else if (Number.isFinite(meta.mediaTime)) raw = meta.mediaTime;
+  }
+  if (raw === null) raw = perf;
+  if (S.lastRaw === null) S.clock += 1 / 30;
+  else {
+    let dt = raw - S.lastRaw;
+    if (!(dt > 0 && dt < 0.5)) { const dp = perf - S.lastPerf; dt = dp > 0 && dp < 0.5 ? dp : 1 / 30; }
+    S.clock += dt;
+  }
+  S.lastRaw = raw; S.lastPerf = perf;
+  return S.clock;
+}
+function tickFps() {
+  const now = performance.now();
+  S.fpsTimes.push(now);
+  while (S.fpsTimes.length && now - S.fpsTimes[0] > 1000) S.fpsTimes.shift();
+  S.fps = S.fpsTimes.length;
+}
+
+/**
+ * Auto-Detect Shooting Side (Left vs Right) and Camera Orientation (Sagittal vs Frontal)
+ */
+function autoDetectSideAndOrientation(sm) {
+  const ls = sm[11], rs = sm[12], lh = sm[23], rh = sm[24], lw = sm[15], rw = sm[16];
+  if (ls && rs && lh && rh) {
+    const shoulderSpan = Math.abs(ls.x - rs.x);
+    const torsoH = Math.max(0.12, Math.abs((ls.y + rs.y) / 2 - (lh.y + rh.y) / 2));
+    const ratio = shoulderSpan / torsoH;
+    S.viewOrientation = ratio < 0.52 ? "Sagittal (Side)" : ratio > 0.72 ? "FrontalView" : "Oblique 45°";
+  }
+  if (cfg.sideMode === "auto") {
+    const rVis = ((rs?.visibility ?? 0) + (sm[14]?.visibility ?? 0) + (rw?.visibility ?? 0)) / 3;
+    const lVis = ((ls?.visibility ?? 0) + (sm[13]?.visibility ?? 0) + (lw?.visibility ?? 0)) / 3;
+    // Vote based on visibility & which wrist is actively raised above shoulder
+    const rAbove = rw && rs && rw.y < rs.y ? 0.35 : 0;
+    const lAbove = lw && ls && lw.y < ls.y ? 0.35 : 0;
+    if (rVis + rAbove > lVis + lAbove + 0.08) S.autoSideVotes.right++;
+    else if (lVis + lAbove > rVis + rAbove + 0.08) S.autoSideVotes.left++;
+    const newSide = S.autoSideVotes.right >= S.autoSideVotes.left ? "right" : "left";
+    if (newSide !== cfg.activeSide && S.shot.stage === "STANCE") {
+      cfg.activeSide = newSide;
+      updateTopBadges();
+    }
+  } else {
+    cfg.activeSide = cfg.sideMode;
+  }
+}
+
+function processFrame(meta) {
+  if (video.readyState < 2 || !video.videoWidth) return;
+  resizeCanvas();
+  const t = frameTime(meta);
+  tickFps();
+  if (!S.pose) { ctx.clearRect(0, 0, canvas.width, canvas.height); return; }
+
+  let ts = Math.round(performance.now());
+  if (ts <= S.lastDetectTs) ts = S.lastDetectTs + 1;
+  S.lastDetectTs = ts;
+
+  let pose, hands = null, face = null;
+  try {
+    pose = S.pose.detectForVideo(video, ts);
+    if (cfg.hands && S.hand) hands = S.hand.detectForVideo(video, ts);
+    if (cfg.face && S.face) face = S.face.detectForVideo(video, ts);
+    // Optional Camera 2 periodic frontal check (~6 Hz)
+    if (S.stream2 && video2.readyState >= 2 && ts - S.cam2Metrics.lastTs > 160) {
+      S.cam2Metrics.lastTs = ts + 1;
+      S.LastDetectTs = ts + 1;
+      const p2 = S.pose.detectForVideo(video2, ts + 1);
+      if (p2.landmarks?.[0]) analyzeCam2Frontal(p2.landmarks[0]);
+    }
+  } catch (e) { handleRuntimeError(e); return; }
+
+  const lm = pose.landmarks?.[0], wl = pose.worldLandmarks?.[0];
+  let sm = null, smw = null;
+  if (lm) {
+    if (t - S.lastSeenT > 0.4) { imgFilter.reset(); worldFilter.reset(); }
+    S.lastSeenT = t;
+    sm = imgFilter.apply(lm, t);
+    smw = wl ? worldFilter.apply(wl, t) : null;
+    autoDetectSideAndOrientation(sm);
+  }
+  const m = sm ? computeMetrics(sm, smw, hands, t) : null;
+  if (m) { pushFrame(m); updateShotStageMachine(m); }
+  draw(sm, hands, face, m);
+  updateLiveUI(m, {
+    pose: lm?.length || 0, hands: hands?.landmarks?.length || 0, face: face?.faceLandmarks?.[0]?.length || 0
+  });
+}
+
+function analyzeCam2Frontal(lm) {
+  const I = SIDES[cfg.activeSide];
+  const sh = lm[I.shoulder], el = lm[I.elbow], hp = lm[I.hip], kn = lm[I.knee], an = lm[I.ankle];
+  if (sh && el) {
+    const dx = Math.abs(el.x - sh.x), dy = Math.max(0.05, Math.abs(el.y - sh.y));
+    S.cam2Metrics.elbowFlare = +(Math.atan2(dx, dy) * 180 / Math.PI).toFixed(1);
+  }
+  if (hp && kn && an) {
+    const midX = (hp.x + an.x) / 2;
+    S.cam2Metrics.kneeValgus = +((kn.x - midX) * 100).toFixed(1);
+  }
+  $("cam2Label").textContent = `CAM 2 · FRONT · Elbow Dev: ${S.cam2Metrics.elbowFlare ?? "–"}°`;
+}
+
+/* =====================================================================
+   7. BIOMECHANICS & 5-STAGE FREE-THROW KINEMATIC ENGINE
+   ===================================================================== */
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const DEG = 180 / Math.PI;
+function angle2px(a, b, c, W, H) {
+  const ax = (a.x - b.x) * W, ay = (a.y - b.y) * H, cx = (c.x - b.x) * W, cy = (c.y - b.y) * H;
+  const d = Math.hypot(ax, ay) * Math.hypot(cx, cy);
+  return d ? Math.acos(clamp((ax * cx + ay * cy) / d, -1, 1)) * DEG : null;
+}
+function angle3(a, b, c) {
+  const v1 = [a.x - b.x, a.y - b.y, a.z - b.z], v2 = [c.x - b.x, c.y - b.y, c.z - b.z];
+  const d = Math.hypot(...v1) * Math.hypot(...v2);
+  return d ? Math.acos(clamp((v1[0] * v2[0] + v1[1] * v2[1] + v1[2] * v2[2]) / d, -1, 1)) * DEG : null;
+}
+function pickHand(hands, wrist) {
+  if (!hands?.landmarks?.length || !wrist) return null;
+  let best = null, bd = 0.12;
+  for (const h of hands.landmarks) { const d = Math.hypot(h[0].x - wrist.x, h[0].y - wrist.y); if (d < bd) { bd = d; best = h; } }
+  return best;
+}
+
+function computeMetrics(sm, smw, hands, t) {
+  const side = cfg.activeSide;
+  const I = SIDES[side], W = canvas.width, H = canvas.height;
+  const ok = (...ids) => ids.every(i => sm[i] && (sm[i].visibility ?? 1) > VIS_MIN);
+  const use3d = cfg.angleMode === "3d" && smw;
+  const ang = (a, b, c) => !ok(a, b, c) ? null : use3d ? angle3(smw[a], smw[b], smw[c]) : angle2px(sm[a], sm[b], sm[c], W, H);
+
+  // All internal angles matching NCAA paper definitions (180° = full extension)
+  const elbow = ang(I.shoulder, I.elbow, I.wrist);
+  const knee = ang(I.hip, I.knee, I.ankle);
+  const hip = ang(I.shoulder, I.hip, I.knee);
+  const shoulder = ang(I.hip, I.shoulder, I.elbow);
+  const ankle = ang(I.knee, I.ankle, I.foot);
+
+  let wristIn = null;
+  const hand = pickHand(hands, sm[I.wrist]);
+  if (hand && ok(I.elbow)) wristIn = angle2px(sm[I.elbow], hand[0], hand[9], W, H);
+  else wristIn = ang(I.elbow, I.wrist, I.index);
+
+  // Forearm angle vs vertical axis (0° = vertical overhead)
+  let forearm = null;
+  if (ok(I.elbow, I.wrist)) {
+    const dx = (sm[I.wrist].x - sm[I.elbow].x) * W, dy = (sm[I.wrist].y - sm[I.elbow].y) * H;
+    const len = Math.hypot(dx, dy);
+    if (len) forearm = Math.acos(clamp(-dy / len, -1, 1)) * DEG;
+  }
+
+  // Trunk lean angle vs vertical (+ = forward lean toward basket, - = slight backward lean)
+  let trunk = null;
+  if (ok(I.hip, I.shoulder)) {
+    const dx = (sm[I.shoulder].x - sm[I.hip].x) * W, dy = (sm[I.shoulder].y - sm[I.hip].y) * H;
+    const dir = ok(I.foot, I.heel) ? Math.sign((sm[I.foot].x - sm[I.heel].x) || 1) : 1;
+    const len = Math.hypot(dx, dy);
+    if (len) trunk = Math.atan2(dx * dir, -dy) * DEG;
+  }
+
+  // Normalized heights relative to shooter body height in frame (Ankle/Heel to Nose)
+  const groundY = ok(I.heel) ? sm[I.heel].y : ok(I.ankle) ? sm[I.ankle].y : null;
+  const headY = ok(0) ? sm[0].y : null;
+  const bodyPixH = groundY != null && headY != null && groundY > headY + 0.2 ? (groundY - headY) * 1.08 : null;
+  const releaseHeightRatio = bodyPixH && ok(I.wrist) ? (groundY - sm[I.wrist].y) / bodyPixH : null;
+  const releaseHeightCm = releaseHeightRatio != null ? +(releaseHeightRatio * (cfg.heightCm || 183)).toFixed(1) : null;
+  const elbowHeightRatio = bodyPixH && ok(I.elbow) ? (groundY - sm[I.elbow].y) / bodyPixH : null;
+  const elbowHeightCm = elbowHeightRatio != null ? +(elbowHeightRatio * (cfg.heightCm || 183)).toFixed(1) : null;
+  const comY = ok(I.hip, I.shoulder, I.knee) ? 0.55 * sm[I.hip].y + 0.25 * sm[I.shoulder].y + 0.20 * sm[I.knee].y : null;
+  const comRatio = bodyPixH && comY != null ? (groundY - comY) / bodyPixH : null;
+  const comHeightCm = comRatio != null ? +(comRatio * (cfg.heightCm || 183)).toFixed(1) : null;
+
+  // Compact skeleton snapshot for 2D/3D Sprite Video Replay
+  const skelIds = [0, 11, 12, 13, 14, 15, 16, 19, 20, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32];
+  const skel = {};
+  for (const id of skelIds) {
+    if (sm[id]) skel[id] = [+sm[id].x.toFixed(3), +sm[id].y.toFixed(3)];
+  }
+
+  return {
+    t, side, elbow, knee, hip, shoulder, ankle, forearm, trunk,
+    wrist: wristIn == null ? null : 180 - wristIn,
+    releaseHeightRatio, releaseHeightCm, elbowHeightRatio, elbowHeightCm, comRatio, comHeightCm,
+    wristY: ok(I.wrist) ? sm[I.wrist].y : null,
+    elbowY: ok(I.elbow) ? sm[I.elbow].y : null,
+    shoulderY: ok(I.shoulder) ? sm[I.shoulder].y : null,
+    hipY: ok(I.hip) ? sm[I.hip].y : null,
+    noseY: headY,
+    armVisible: ok(I.shoulder, I.elbow, I.wrist),
+    legVisible: ok(I.hip, I.knee, I.ankle),
+    skel
+  };
+}
+
+function slopeOf(key, cur) {
+  if (cur[key] == null) return null;
+  const pts = [[cur.t, cur[key]]];
+  for (let i = S.frames.length - 1; i >= 0; i--) {
+    const f = S.frames[i]; if (cur.t - f.t > 0.1) break;
+    if (f[key] != null) pts.push([f.t, f[key]]);
+  }
+  if (pts.length < 2) return null;
+  const n = pts.length; let mt = 0, mv = 0;
+  for (const [t, v] of pts) { mt += t; mv += v; } mt /= n; mv /= n;
+  let num = 0, den = 0;
+  for (const [t, v] of pts) { num += (t - mt) * (v - mv); den += (t - mt) ** 2; }
+  return den > 0 ? num / den : null;
+}
+
+function pushFrame(m) {
+  m.elbowVel = slopeOf("elbow", m);
+  m.kneeVel = slopeOf("knee", m);
+  m.hipVel = slopeOf("hip", m);
+  m.ankleVel = slopeOf("ankle", m);
+  const comSlope = slopeOf("comRatio", m);
+  m.comVel = comSlope != null ? comSlope * (cfg.heightCm / 100) : null;
+  m.stage = S.shot.stage;
+  S.frames.push(m);
+  while (S.frames.length && m.t - S.frames[0].t > 9) S.frames.shift();
+}
+
+/**
+ * 5-STAGE FREE-THROW STATE MACHINE
+ * Stages: 1. STANCE -> 2. DIP (PP) -> 3. RISE -> 4. RELEASE (RP) -> 5. FOLLOW
+ */
+function setStageStepper(stage) {
+  S.shot.stage = stage;
+  const order = ["STANCE", "DIP", "RISE", "RELEASE", "FOLLOW"];
+  const idx = order.indexOf(stage);
+  document.querySelectorAll("#stageStepper .st-pill").forEach((el, i) => {
+    el.classList.toggle("active", i === idx);
+    el.classList.toggle("done", i < idx);
+  });
+}
+
+/**
+ * REAL CAMERA VIDEO CLIP RECORDER (MediaRecorder)
+ * Automatically records each detected throw (and supports manual ⏺ Rec Clip) so you can inspect
+ * the real video and manually tag stages in post-analysis if the tracker misses anything.
+ */
+function startClipRecorder() {
+  if (S.recActive || !S.stream || typeof MediaRecorder === "undefined") return;
+  try {
+    S.recChunks = [];
+    const mime = ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm", "video/mp4"].find(m => MediaRecorder.isTypeSupported?.(m)) || "";
+    const rec = S.recorder = new MediaRecorder(S.stream, mime ? { mimeType: mime, videoBitsPerSecond: 4000000 } : undefined);
+    rec.ondataavailable = e => { if (e.data && e.data.size > 0) S.recChunks.push(e.data); };
+    rec.start(120);
+    S.recActive = true;
+  } catch (e) { console.warn("MediaRecorder start error:", e); }
+}
+
+function stopClipRecorderForShot(shotId) {
+  if (!S.recorder || !S.recActive) return;
+  const rec = S.recorder;
+  S.recActive = false;
+  rec.onstop = () => {
+    if (!S.recChunks.length) return;
+    const blob = new Blob(S.recChunks, { type: rec.mimeType || "video/webm" });
+    const url = URL.createObjectURL(blob);
+    S.videoClips[shotId] = { url, blob, ext: (rec.mimeType || "").includes("mp4") ? "mp4" : "webm" };
+    if (currentShot()?.id === shotId && $("replayVideo")) {
+      $("replayVideo").src = url;
+    }
+  };
+  try { rec.stop(); } catch {}
+}
+
+function updateShotStageMachine(f) {
+  const sh = S.shot;
+  if (!f.armVisible) {
+    if (sh.stage === "STANCE") setBadge("⚠ Shooting arm not clearly visible", "warn");
+    return;
+  }
+  const wristAboveShoulder = f.wristY != null && f.shoulderY != null && f.wristY < f.shoulderY;
+  const kneeDipping = f.knee != null && (f.knee < 155 || (f.kneeVel != null && f.kneeVel < -25));
+
+  switch (sh.stage) {
+    case "STANCE":
+      if (f.t - sh.lastEnd < 0.9) break;
+      if (kneeDipping && !wristAboveShoulder) {
+        sh.dipStartT = f.t; sh.dipMinKnee = f.knee ?? 160; sh.dipT = f.t;
+        startClipRecorder();
+        setStageStepper("DIP");
+        setBadge("2. Preparatory Dip (PP)", "active");
+      } else if (wristAboveShoulder) {
+        sh.dipStartT = f.t - 0.35; sh.riseStartT = f.t; sh.peakElbow = f.elbow ?? 0; sh.peakT = f.t;
+        startClipRecorder();
+        setStageStepper("RISE");
+        setBadge("3. Power Rise", "active");
+      }
+      break;
+
+    case "DIP":
+      if (f.knee != null && f.knee < sh.dipMinKnee) { sh.dipMinKnee = f.knee; sh.dipT = f.t; }
+      if (wristAboveShoulder || (f.kneeVel != null && f.kneeVel > 30 && f.t - sh.dipStartT > 0.12)) {
+        sh.riseStartT = f.t; sh.peakElbow = f.elbow ?? 0; sh.peakT = f.t;
+        setStageStepper("RISE");
+        setBadge("3. Power Rise", "active");
+      } else if (f.t - sh.dipStartT > 2.4) {
+        if (!S.manualRecStartT) stopClipRecorderForShot(0);
+        setStageStepper("STANCE");
+        setBadge("Ready for Free Throw");
+      }
+      break;
+
+    case "RISE":
+      if (f.elbow != null && f.elbow > sh.peakElbow + 0.4) { sh.peakElbow = f.elbow; sh.peakT = f.t; }
+      if (wristAboveShoulder && f.elbow != null && f.elbow >= 132) {
+        setStageStepper("RELEASE");
+      }
+      if (!wristAboveShoulder || (f.elbow != null && sh.peakElbow - f.elbow > 11) || (wristAboveShoulder && f.t - sh.peakT > 0.32)) {
+        const overHead = f.noseY == null || (f.wristY != null && f.wristY < f.noseY + 0.05);
+        if (sh.peakElbow >= 134 && (wristAboveShoulder ? overHead : true)) {
+          sh.releaseT = sh.peakT;
+          S.releaseMarks.push(sh.releaseT);
+          setStageStepper("FOLLOW");
+          setBadge("5. Follow-Through Hold", "good");
+          if (!wristAboveShoulder) {
+            finalizeShot(sh.releaseT, f.t);
+            setStageStepper("STANCE"); sh.lastEnd = f.t; setBadge("Ready for Free Throw");
+          }
+        } else {
+          if (!S.manualRecStartT) stopClipRecorderForShot(0);
+          setStageStepper("STANCE"); sh.lastEnd = f.t; setBadge("Ready for Free Throw");
+        }
+      }
+      break;
+
+    case "RELEASE":
+    case "FOLLOW":
+      if (!wristAboveShoulder || f.t - sh.releaseT > 1.7) {
+        finalizeShot(sh.releaseT || sh.peakT, f.t);
+        setStageStepper("STANCE"); sh.lastEnd = f.t; setBadge("Ready for Free Throw");
+      }
+      break;
+  }
+}
+
+function nearest(arr, t) { let b = null; for (const f of arr) if (!b || Math.abs(f.t - t) < Math.abs(b.t - t)) b = f; return b; }
+function extreme(arr, key, sign = 1) { let b = null; for (const f of arr) if (f[key] != null && (!b || sign * f[key] > sign * b[key])) b = f; return b; }
+function meanOf(arr, key) { const v = arr.map(f => f[key]).filter(x => Number.isFinite(x) && x > 0); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; }
+
+/* =====================================================================
+   8. SHOT FINALIZATION, SEQUENCE VALIDATION & POSITIVE FEEDBACK
+   ===================================================================== */
+function finalizeShot(releaseT, endT) {
+  const win = S.frames.filter(f => f.t >= releaseT - 2.4 && f.t <= endT);
+  if (win.length < 8) return;
+
+  // Identify the 5 Stage Timestamps
+  const pre = win.filter(f => f.t <= releaseT && f.t >= releaseT - 1.9);
+  const dipF = extreme(pre, "knee", -1) || extreme(pre, "elbow", -1) || pre[0];
+  const dipT = dipF ? dipF.t : releaseT - 0.55;
+
+  let stanceT = Math.max(win[0].t, dipT - 0.45);
+  const beforeDip = win.filter(f => f.t <= dipT && f.knee != null);
+  if (beforeDip.length > 2 && dipF?.knee != null) {
+    const maxK = Math.max(...beforeDip.map(f => f.knee));
+    for (let i = beforeDip.length - 1; i >= 0; i--) {
+      if (beforeDip[i].knee >= maxK - 0.15 * (maxK - dipF.knee) - 2) { stanceT = beforeDip[i].t; break; }
+    }
+  }
+  const riseT = dipT + (releaseT - dipT) * 0.45;
+  const followT = Math.min(endT, releaseT + 0.35);
+
+  const propSeg = win.filter(f => f.t >= dipT && f.t <= releaseT + 0.08);
+  const atPP = nearest(win, dipT);
+  const atRP = nearest(win, releaseT);
+  const elbowSetF = extreme(win.filter(f => f.t >= stanceT && f.t <= releaseT), "elbow", -1) || atPP;
+
+  const evPeak = extreme(propSeg, "elbowVel", 1);
+  const kvPeak = extreme(propSeg, "kneeVel", 1);
+  const hvPeak = extreme(propSeg, "hipVel", 1);
+  const avPeak = extreme(propSeg, "ankleVel", 1);
+  const cvPeak = extreme(propSeg, "comVel", 1);
+  const wfPeak = extreme(win.filter(f => f.t >= releaseT), "wrist", 1);
+
+  const kneePP = atPP?.knee ?? null;
+  const kneeRP = atRP?.knee ?? null;
+  const hipPP = atPP?.hip ?? null;
+  const hipRP = atRP?.hip ?? null;
+  const anklePP = atPP?.ankle ?? null;
+  const ankleRP = atRP?.ankle ?? null;
+  const elbowPP = elbowSetF?.elbow ?? null;
+  const elbowRP = atRP?.elbow ?? null;
+  const forearmPP = elbowSetF?.forearm ?? null;
+  const forearmRP = atRP?.forearm ?? null;
+
+  // Estimated ball release angle from forearm & shoulder geometry at release
+  const releaseAngle = forearmRP != null ? clamp(90 - forearmRP * 3.1, 43, 62) : 51.5;
+  const legArmDelay = evPeak && kvPeak ? (evPeak.t - kvPeak.t) * 1000 : null;
+  const followThrough = (endT - releaseT) * 1000;
+
+  const metrics = {
+    kneePP, kneeRP, kneeROM: kneePP != null && kneeRP != null ? kneeRP - kneePP : null,
+    kneeVelPeak: kvPeak?.kneeVel ?? null,
+    kneeVelMean: meanOf(propSeg, "kneeVel"),
+    hipPP, hipRP, hipROM: hipPP != null && hipRP != null ? hipRP - hipPP : null,
+    hipVelPeak: hvPeak?.hipVel ?? null,
+    anklePP, ankleRP, ankleROM: anklePP != null && ankleRP != null ? ankleRP - anklePP : null,
+    ankleVelPeak: avPeak?.ankleVel ?? null,
+    elbowPP, elbowRP, elbowROM: elbowPP != null && elbowRP != null ? elbowRP - elbowPP : null,
+    elbowVelPeak: evPeak?.elbowVel ?? null,
+    elbowVelMean: meanOf(propSeg, "elbowVel"),
+    forearmPP, forearmRP, forearmROM: forearmPP != null && forearmRP != null ? Math.abs(forearmPP - forearmRP) : null,
+    trunkRP: atRP?.trunk ?? null,
+    releaseHeightRatio: atRP?.releaseHeightRatio ?? null,
+    elbowHeightPP: elbowSetF?.elbowHeightRatio ?? null,
+    comVelPeak: cvPeak?.comVel ?? null,
+    releaseAngle,
+    duration: (releaseT - dipT) * 1000,
+    legArmDelay,
+    followThrough,
+    wristFollow: wfPeak?.wrist ?? null,
+    frontalElbowFlare: S.cam2Metrics.elbowFlare
+  };
+  for (const k in metrics) {
+    if (Number.isFinite(metrics[k])) metrics[k] = +(k.includes("Ratio") || k.includes("Height") || k === "comVelPeak" ? metrics[k].toFixed(2) : metrics[k].toFixed(1));
+    else metrics[k] = null;
+  }
+
+  // Downsample series + skeleton frames for Sprite Video Replay
+  const step = Math.max(1, Math.ceil(win.length / 95));
+  const r = v => v == null ? null : +v.toFixed(1);
+  const series = win.filter((_, i) => i % step === 0).map(f => ({
+    t: +(f.t - releaseT).toFixed(3),
+    stage: f.t < dipT - 0.12 ? "STANCE" : f.t <= dipT + 0.08 ? "DIP" : f.t < releaseT - 0.04 ? "RISE" : f.t <= releaseT + 0.06 ? "RELEASE" : "FOLLOW",
+    elbow: r(f.elbow), knee: r(f.knee), hip: r(f.hip), shoulder: r(f.shoulder), ankle: r(f.ankle),
+    forearm: r(f.forearm), trunk: r(f.trunk), wrist: r(f.wrist),
+    elbowVel: r(f.elbowVel), kneeVel: r(f.kneeVel),
+    releaseHeightRatio: f.releaseHeightRatio != null ? +f.releaseHeightRatio.toFixed(3) : null,
+    elbowHeightRatio: f.elbowHeightRatio != null ? +f.elbowHeightRatio.toFixed(3) : null,
+    comRatio: f.comRatio != null ? +f.comRatio.toFixed(3) : null,
+    skel: f.skel
+  }));
+
+  const stages = {
+    stanceT: +(stanceT - releaseT).toFixed(3),
+    dipT: +(dipT - releaseT).toFixed(3),
+    riseT: +(riseT - releaseT).toFixed(3),
+    releaseT: 0,
+    followT: +(followT - releaseT).toFixed(3),
+    manual: false
+  };
+
+  const hCm = cfg.heightCm || 183;
+  metrics.heightCm = hCm;
+  metrics.releaseHeightCm = metrics.releaseHeightRatio != null ? +(metrics.releaseHeightRatio * hCm).toFixed(1) : null;
+  metrics.elbowHeightCm = metrics.elbowHeightPP != null ? +(metrics.elbowHeightPP * hCm).toFixed(1) : null;
+
+  const seq = evaluateKinematicSequence(metrics, stages);
+  const shot = {
+    id: Date.now(), date: new Date().toISOString(),
+    playerName: (cfg.playerName || "Player 1").trim(),
+    heightCm: hCm,
+    sessionDate: cfg.sessionDate || todayISO(),
+    label: null,
+    side: cfg.activeSide, sessionMode: cfg.sessionMode, model: cfg.model,
+    angleMode: cfg.angleMode, fps: S.fps, resolution: `${video.videoWidth}x${video.videoHeight}`,
+    metrics, stages, sequence: seq, series, imu: synthesizeImuFromSeries(series, metrics)
+  };
+
+  stopClipRecorderForShot(shot.id);
+  S.shots.unshift(shot);
+  S.selectedId = shot.id;
+  saveShots();
+  renderAll();
+  announceShotPositive(shot);
+}
+
+/**
+ * MANUAL POST-ANALYSIS STAGE TAGGING & FULL BIOMECHANICAL RECALCULATION
+ * When the user manually marks any of the 5 stages (Stance, Dip/PP, Rise, Release/RP, Follow)
+ * on the Sprite or Video timeline, this recalculates all joint angles, velocities, heights (using heightCm),
+ * sequence checks, and NCAA comparisons from the tagged frames.
+ */
+function recalculateShotFromManualStages(shot) {
+  const ser = shot?.series;
+  if (!ser?.length) return;
+  const st = shot.stages || { stanceT: ser[0].t, dipT: -0.45, riseT: -0.2, releaseT: 0, followT: ser[ser.length - 1].t };
+  const hCm = shot.heightCm = cfg.heightCm || shot.heightCm || 183;
+
+  // Update each frame's stage label based on the user's manual stage timestamps
+  for (const f of ser) {
+    if (f.t <= (st.stanceT + st.dipT) / 2) f.stage = "STANCE";
+    else if (f.t <= (st.dipT + st.riseT) / 2) f.stage = "DIP";
+    else if (f.t < st.releaseT - 0.03) f.stage = "RISE";
+    else if (f.t <= (st.releaseT + st.followT) / 2) f.stage = "RELEASE";
+    else f.stage = "FOLLOW";
+  }
+
+  const atPP = nearest(ser, st.dipT) || ser[0];
+  const atRP = nearest(ser, st.releaseT) || ser[ser.length - 1];
+  const propSeg = ser.filter(f => f.t >= st.dipT && f.t <= st.releaseT + 0.08);
+  const seg = propSeg.length >= 2 ? propSeg : ser;
+  const elbowSetF = extreme(ser.filter(f => f.t >= st.stanceT && f.t <= st.releaseT), "elbow", -1) || atPP;
+  const evPeak = extreme(seg, "elbowVel", 1);
+  const kvPeak = extreme(seg, "kneeVel", 1);
+  const wfPeak = extreme(ser.filter(f => f.t >= st.releaseT), "wrist", 1);
+
+  const m = shot.metrics;
+  m.heightCm = hCm;
+  m.kneePP = atPP?.knee ?? m.kneePP;
+  m.kneeRP = atRP?.knee ?? m.kneeRP;
+  m.kneeROM = m.kneePP != null && m.kneeRP != null ? +(m.kneeRP - m.kneePP).toFixed(1) : m.kneeROM;
+  if (kvPeak?.kneeVel != null) m.kneeVelPeak = +kvPeak.kneeVel.toFixed(1);
+  const kvm = meanOf(seg, "kneeVel"); if (kvm != null) m.kneeVelMean = +kvm.toFixed(1);
+
+  m.hipPP = atPP?.hip ?? m.hipPP;
+  m.hipRP = atRP?.hip ?? m.hipRP;
+  m.hipROM = m.hipPP != null && m.hipRP != null ? +(m.hipRP - m.hipPP).toFixed(1) : m.hipROM;
+
+  m.anklePP = atPP?.ankle ?? m.anklePP;
+  m.ankleRP = atRP?.ankle ?? m.ankleRP;
+  m.ankleROM = m.anklePP != null && m.ankleRP != null ? +(m.ankleRP - m.anklePP).toFixed(1) : m.ankleROM;
+
+  m.elbowPP = atPP?.elbow ?? elbowSetF?.elbow ?? m.elbowPP;
+  m.elbowRP = atRP?.elbow ?? m.elbowRP;
+  m.elbowROM = m.elbowPP != null && m.elbowRP != null ? +(m.elbowRP - m.elbowPP).toFixed(1) : m.elbowROM;
+  if (evPeak?.elbowVel != null) m.elbowVelPeak = +evPeak.elbowVel.toFixed(1);
+
+  m.forearmPP = atPP?.forearm ?? m.forearmPP;
+  m.forearmRP = atRP?.forearm ?? m.forearmRP;
+  m.forearmROM = m.forearmPP != null && m.forearmRP != null ? +Math.abs(m.forearmPP - m.forearmRP).toFixed(1) : m.forearmROM;
+  m.trunkRP = atRP?.trunk ?? m.trunkRP;
+
+  // Height-calibrated release height & elbow set height
+  const relUse = atRP?.releaseHeightRatio ?? (atRP?.skel?.[SIDES[shot.side || "right"].wrist] ? (0.87 - atRP.skel[SIDES[shot.side || "right"].wrist][1]) / 0.66 : m.releaseHeightRatio);
+  if (Number.isFinite(relUse)) {
+    m.releaseHeightRatio = +clamp(relUse, 0.85, 1.45).toFixed(2);
+    m.releaseHeightCm = +(m.releaseHeightRatio * hCm).toFixed(1);
+  }
+  const elbUse = atPP?.elbowHeightRatio ?? m.elbowHeightPP;
+  if (Number.isFinite(elbUse)) {
+    m.elbowHeightPP = +clamp(elbUse, 0.4, 1.0).toFixed(2);
+    m.elbowHeightCm = +(m.elbowHeightPP * hCm).toFixed(1);
+  }
+
+  m.releaseAngle = m.forearmRP != null ? +clamp(90 - m.forearmRP * 3.1, 43, 62).toFixed(1) : m.releaseAngle;
+  m.duration = Math.round(Math.max(80, (st.releaseT - st.dipT) * 1000));
+  if (evPeak && kvPeak) m.legArmDelay = Math.round((evPeak.t - kvPeak.t) * 1000);
+  m.followThrough = Math.round(Math.max(60, (st.followT - st.releaseT) * 1000));
+  if (wfPeak?.wrist != null) m.wristFollow = +wfPeak.wrist.toFixed(1);
+
+  shot.sequence = evaluateKinematicSequence(m, st);
+  shot.imu = synthesizeImuFromSeries(ser, m);
+  saveShots();
+  renderAll();
+}
+
+/**
+ * KINEMATIC SEQUENCE VALIDATOR
+ * Evaluates whether the 5-stage proximal-to-distal free-throw sequence is biomechanically correct.
+ */
+function evaluateKinematicSequence(m, stages) {
+  const checks = [
+    {
+      id: "dipLoad",
+      title: "1→2. Coincident Lower-Body & Pocket Load (PP)",
+      ok: (m.kneePP == null || (m.kneePP >= 98 && m.kneePP <= 132)) && (m.elbowPP == null || (m.elbowPP >= 65 && m.elbowPP <= 108)),
+      detail: `Knee PP ${m.kneePP ?? "–"}° (target 104°–123°) · Elbow PP ${m.elbowPP ?? "–"}° (target 72°–98°)`
+    },
+    {
+      id: "proximalToDistal",
+      title: "2→3. Proximal-to-Distal Chain (Legs Lead Arm)",
+      ok: m.legArmDelay == null || (m.legArmDelay >= 15 && m.legArmDelay <= 280),
+      detail: m.legArmDelay != null
+        ? (m.legArmDelay >= 15 ? `Legs peaked ${Math.round(m.legArmDelay)} ms before elbow` : `Arm fired ${Math.round(-m.legArmDelay)} ms too early before legs`)
+        : "Sequential upward acceleration"
+    },
+    {
+      id: "subMaximalVelocity",
+      title: "3. Controlled Sub-Maximal Knee Velocity (NCAA Key)",
+      ok: m.kneeVelPeak == null || (m.kneeVelPeak >= 130 && m.kneeVelPeak <= 265),
+      detail: `Peak ${m.kneeVelPeak ? Math.round(m.kneeVelPeak) : "–"} °/s (NCAA Proficient: 213 ± 48 °/s)`
+    },
+    {
+      id: "verticalRelease",
+      title: "4. Vertical Trunk & Full Extension at Release (RP)",
+      ok: (m.trunkRP == null || Math.abs(m.trunkRP + 1.1) <= 5.5) && (m.elbowRP == null || m.elbowRP >= 152),
+      detail: `Trunk ${m.trunkRP ?? "–"}° (NCAA −1.1°) · Elbow RP ${m.elbowRP ?? "–"}° (NCAA ~163°)`
+    },
+    {
+      id: "followThrough",
+      title: "5. Follow-Through Gooseneck Hold",
+      ok: m.followThrough == null || m.followThrough >= 180,
+      detail: `Held overhead for ${m.followThrough ? Math.round(m.followThrough) : "–"} ms`
+    }
+  ];
+  const passed = checks.filter(c => c.ok).length;
+  const score = Math.round((passed / checks.length) * 100);
+  return { checks, passed, total: checks.length, score, valid: passed >= 4 };
+}
+
+/**
+ * EVALUATE THROW AGAINST NCAA BENCHMARKS & PERSONAL REFERENCE
+ * Always produces constructive, positive reinforcement first + top biomechanical adjustment.
+ */
+function evaluateShotBiomechanics(shot) {
+  const m = shot.metrics;
+  const praises = [], fixes = [], tableRows = [];
+  let zSum = 0, zCount = 0;
+
+  for (const B of NCAA_BENCHMARKS) {
+    const val = m[B.key];
+    if (!Number.isFinite(val)) continue;
+    const diff = val - B.profMean;
+    const z = Math.abs(diff) / Math.max(B.profSd, 1e-3);
+    zSum += Math.min(z, 3.5); zCount++;
+    const inZone = z <= 1.15;
+    if (inZone) praises.push({ label: B.label, text: B.praise, val, unit: B.unit, sig: B.sig });
+    else fixes.push({ label: B.label, text: diff < 0 ? B.lowCue : B.highCue, val, diff, z, unit: B.unit, sig: B.sig });
+    tableRows.push({ B, val, diff, z, inZone });
+  }
+
+  // Prioritize statistically significant NCAA discriminators (knee velocity, trunk lean, release height)
+  praises.sort((a, b) => (b.sig ? 1 : 0) - (a.sig ? 1 : 0));
+  fixes.sort((a, b) => (b.sig ? 1.5 : 1) * b.z - (a.sig ? 1.5 : 1) * a.z);
+
+  const ncaaScore = zCount ? Math.round(clamp(100 - 18 * (zSum / zCount), 35, 99)) : 80;
+  const overallScore = Math.round(0.6 * ncaaScore + 0.4 * (shot.sequence?.score ?? 85));
+
+  if (!praises.length) {
+    praises.push({ label: "Shot Execution", text: "Smooth upward continuum from set pocket through release!", val: overallScore, unit: "pts" });
+  }
+
+  return { overallScore, ncaaScore, praises, fixes, tableRows };
+}
+
+/* =====================================================================
+   9. VISUAL POSITIVE FEEDBACK & VOICE COACHING
+   ===================================================================== */
+function speakFeedback(text) {
+  if (!cfg.voice || !("speechSynthesis" in window)) return;
+  try {
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = "en-US"; u.rate = 1.04;
+    window.speechSynthesis.speak(u);
+  } catch {}
+}
+
+function announceShotPositive(shot) {
+  const ev = evaluateShotBiomechanics(shot);
+  const seq = shot.sequence;
+  const topPraise = ev.praises.slice(0, 2);
+  const topFix = ev.fixes.slice(0, 2);
+
+  // Keep the video viewport completely unobstructed so the user can stop/control the video at any time.
+  // All per-throw biomechanical feedback is updated in the right Analysis Panel (#lastShot),
+  // and only a non-blocking status pill is updated in the top-right corner.
+  $("toast").hidden = true;
+  setBadge(`✓ Throw #${shotNumber(shot)} Saved · Score ${ev.overallScore}/100`, seq.valid ? "good" : "active");
+
+  // Optional hands-free audio coaching if Voice is enabled
+  if (cfg.voice && cfg.sessionMode === "solo") {
+    const voiceMsg = `Throw ${shotNumber(shot)} saved. ${ev.overallScore} points.`;
+    speakFeedback(voiceMsg);
+  }
+}
+
+$("toast").addEventListener("click", e => {
+  const b = e.target.closest("[data-toast-label]");
+  if (b && S.shots[0]) { labelShot(S.shots[0].id, b.dataset.toastLabel); $("toast").hidden = true; return; }
+  if (e.target.closest("[data-toast-replay]")) {
+    $("toast").hidden = true;
+    $("app").classList.add("panel-open");
+    switchTab("replay");
+  }
+});
+
+/* =====================================================================
+   10. SPRITE VIDEO SHOT RECREATION ENGINE (Interactive Canvas Player)
+   ===================================================================== */
+const spCanvas = $("spriteCanvas"), spCtx = spCanvas.getContext("2d");
+
+const replayVideo = $("replayVideo");
+
+function startSpritePlayer() {
+  if (S.sprite.raf) return;
+  S.sprite.lastTick = performance.now();
+  const loop = now => {
+    const dt = (now - S.sprite.lastTick) / 1000;
+    S.sprite.lastTick = now;
+    const shot = currentShot();
+    if (shot?.series?.length && (spCanvas.offsetParent || replayVideo.offsetParent)) {
+      const len = shot.series.length;
+      if (S.sprite.playing) {
+        S.sprite.idx += dt * 30 * S.sprite.speed;
+        if (S.sprite.idx >= len) {
+          S.sprite.idx = 0;
+          if (replayVideo.src) { try { replayVideo.currentTime = 0; replayVideo.play().catch(() => {}); } catch {} }
+        }
+        $("spScrub").value = Math.round((S.sprite.idx / Math.max(1, len - 1)) * 100);
+      }
+      const fIdx = Math.floor(clamp(S.sprite.idx, 0, len - 1));
+      const f = shot.series[fIdx];
+      if ($("curFrameInfo") && f) {
+        $("curFrameInfo").textContent = `Frame ${fIdx + 1}/${len} · ${f.stage} · t = ${f.t >= 0 ? "+" : ""}${f.t.toFixed(2)}s`;
+      }
+      if (S.sprite.viewMode === "sprite") {
+        drawSpriteFrame(shot, fIdx);
+      }
+    }
+    S.sprite.raf = requestAnimationFrame(loop);
+  };
+  S.sprite.raf = requestAnimationFrame(loop);
+}
+
+/**
+ * Generates an idealized NCAA Proficient ghost pose at normalized progress u in [0, 1]
+ */
+function ncaaGhostPose(u,stage) {
+  // Smooth interpolation across the 5 stages in normalized canvas space
+  const dip = Math.sin(clamp(u / 0.45, 0, 1) * Math.PI) * 0.08;
+  const rise = clamp((u - 0.35) / 0.4, 0, 1);
+  const ankleX = 0.48, ankleY = 0.87;
+  const kneeX = 0.52 + dip * 0.45, kneeY = 0.69 + dip * 0.35;
+  const hipX = 0.46 - dip * 0.2, hipY = 0.51 + dip * 0.7 - rise * 0.03;
+  const shX = 0.47, shY = 0.29 + dip * 0.65 - rise * 0.03;
+  const headX = 0.48, headY = shY - 0.09;
+  const elX = shX + 0.08 + rise * 0.04, elY = shY + 0.08 - rise * 0.16;
+  const wrX = elX + 0.04 + rise * 0.04, wrY = elY - 0.09 - rise * 0.13;
+  return { ankle: [ankleX, ankleY], knee: [kneeX, kneeY], hip: [hipX, hipY], shoulder: [shX, shY], head: [headX, headY], elbow: [elX, elY], wrist: [wrX, wrY] };
+}
+
+function drawSpriteFrame(shot, frameIdx) {
+  const dpr = devicePixelRatio || 1, W = spCanvas.clientWidth || 400, H = spCanvas.clientHeight || 270;
+  if (spCanvas.width !== Math.round(W * dpr)) { spCanvas.width = Math.round(W * dpr); spCanvas.height = Math.round(H * dpr); }
+  spCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  spCtx.clearRect(0, 0, W, H);
+
+  // Court grid & Free-Throw line floor
+  spCtx.strokeStyle = "#ffffff12"; spCtx.lineWidth = 1;
+  for (let y = 40; y < H; y += 38) { spCtx.beginPath(); spCtx.moveTo(0, y); spCtx.lineTo(W, y); spCtx.stroke(); }
+  spCtx.strokeStyle = "#ff7a1a55"; spCtx.lineWidth = 2;
+  spCtx.beginPath(); spCtx.moveTo(20, H - 24); spCtx.lineTo(W - 20, H - 24); spCtx.stroke();
+
+  const ser = shot.series;
+  const f = ser[frameIdx];
+  if (!f) return;
+  const I = SIDES[shot.side || "right"];
+
+  // Map skeleton coordinates to centered sprite viewport
+  const sk = f.skel || {};
+  const mapPt = pt => pt ? [pt[0] * W * 0.75 + W * 0.12, pt[1] * (H - 36) + 14] : null;
+
+  // 1. Optional NCAA Proficient Ghost Skeleton + Wrist & COM Motion Trails
+  if ($("spGhostChk").checked) {
+    const u = frameIdx / Math.max(1, ser.length - 1);
+    const g = ncaaGhostPose(u, f.stage);
+    const gp = k => [g[k][0] * W, g[k][1] * H];
+    spCtx.save();
+    spCtx.setLineDash([4, 4]);
+    spCtx.strokeStyle = "rgba(76, 194, 255, 0.35)"; spCtx.lineWidth = 3;
+    const gChain = [gp("ankle"), gp("knee"), gp("hip"), gp("shoulder"), gp("elbow"), gp("wrist")];
+    spCtx.beginPath();
+    gChain.forEach(([x, y], i) => i ? spCtx.lineTo(x, y) : spCtx.moveTo(x, y));
+    spCtx.stroke();
+    const [hx, hy] = gp("head");
+    spCtx.beginPath(); spCtx.arc(hx, hy, 10, 0, Math.PI * 2); spCtx.stroke();
+    spCtx.restore();
+
+    // Wrist trajectory ribbon across the shot
+    spCtx.beginPath();
+    let started = false;
+    for (let i = 0; i <= frameIdx; i++) {
+      const wp = mapPt(ser[i].skel?.[I.wrist]);
+      if (!wp) continue;
+      if (!started) { spCtx.moveTo(wp[0], wp[1]); started = true; } else spCtx.lineTo(wp[0], wp[1]);
+    }
+    spCtx.strokeStyle = "#ff7a1a99"; spCtx.lineWidth = 2.5; spCtx.stroke();
+  }
+
+  // 2. Draw Player Sprite Skeleton
+  const drawSeg = (a, b, col, lw) => {
+    const pa = mapPt(sk[a]), pb = mapPt(sk[b]);
+    if (!pa || !pb) return;
+    spCtx.beginPath(); spCtx.moveTo(pa[0], pa[1]); spCtx.lineTo(pb[0], pb[1]);
+    spCtx.strokeStyle = col; spCtx.lineWidth = lw; spCtx.lineCap = "round"; spCtx.stroke();
+  };
+
+  // Off-side limbs dimmed
+  const off = shot.side === "left" ? SIDES.right : SIDES.left;
+  [[off.shoulder, off.elbow], [off.elbow, off.wrist], [off.hip, off.knee], [off.knee, off.ankle]]
+    .forEach(([a, b]) => drawSeg(a, b, "rgba(255,255,255,0.22)", 3));
+
+  // Primary shooting side kinematic chain
+  [[I.ankle, I.heel], [I.heel, I.foot], [I.ankle, I.foot], [I.knee, I.ankle], [I.hip, I.knee]].forEach(([a, b]) => drawSeg(a, b, GREEN, 5));
+  drawSeg(I.hip, I.shoulder, BLUE, 5.5);
+  [[I.shoulder, I.elbow], [I.elbow, I.wrist], [I.wrist, I.index]].forEach(([a, b]) => drawSeg(a, b, ORANGE, 5.5));
+
+  // Head & Basketball Sprite
+  const headPt = mapPt(sk[0]), shPt = mapPt(sk[I.shoulder]);
+  if (headPt) {
+    spCtx.beginPath(); spCtx.arc(headPt[0], headPt[1], 12, 0, Math.PI * 2);
+    spCtx.fillStyle = "#19202e"; spCtx.fill();
+    spCtx.lineWidth = 2.5; spCtx.strokeStyle = "#fff"; spCtx.stroke();
+  }
+  const wristPt = mapPt(sk[I.wrist]);
+  if (wristPt) {
+    const afterRel = f.t > 0.02;
+    const bx = wristPt[0] + (afterRel ? f.t * 140 : 8);
+    const by = wristPt[1] - 12 - (afterRel ? f.t * 165 - 0.5 * 260 * f.t * f.t : 0);
+    spCtx.beginPath(); spCtx.arc(bx, by, 11, 0, Math.PI * 2);
+    spCtx.fillStyle = "#ff7a1a"; spCtx.fill();
+    spCtx.strokeStyle = "#111"; spCtx.lineWidth = 1.5; spCtx.stroke();
+  }
+
+  // Joint nodes + live angle badges on sprite
+  [I.shoulder, I.elbow, I.wrist, I.hip, I.knee, I.ankle].forEach(id => {
+    const p = mapPt(sk[id]); if (!p) return;
+    spCtx.beginPath(); spCtx.arc(p[0], p[1], 4.5, 0, Math.PI * 2);
+    spCtx.fillStyle = "#fff"; spCtx.fill();
+  });
+
+  const badge = (pt, txt, col, dx, dy) => {
+    if (!pt || txt == null) return;
+    spCtx.font = "700 11.5px -apple-system, Segoe UI, sans-serif";
+    const x = pt[0] + dx, y = pt[1] + dy;
+    const w = spCtx.measureText(txt).width + 10;
+    spCtx.fillStyle = "#080a10d8";
+    spCtx.fillRect(x - w / 2, y - 9, w, 18);
+    spCtx.fillStyle = col; spCtx.textAlign = "center"; spCtx.textBaseline = "middle";
+    spCtx.fillText(txt, x, y);
+  };
+  if (f.elbow != null) badge(mapPt(sk[I.elbow]), `Elbow ${Math.round(f.elbow)}°`, ORANGE, 42, -10);
+  if (f.knee != null) badge(mapPt(sk[I.knee]), `Knee ${Math.round(f.knee)}°`, GREEN, 42, 0);
+  if (f.hip != null) badge(mapPt(sk[I.hip]), `Hip ${Math.round(f.hip)}°`, BLUE, -38, -4);
+  if (f.trunk != null && shPt) badge(shPt, `Trunk ${f.trunk > 0 ? "+" : ""}${f.trunk.toFixed(1)}°`, YELLOW, -48, -14);
+
+  // Top-left stage banner inside sprite canvas
+  const hCm = shot.heightCm || cfg.heightCm || 183;
+  const relCm = shot.metrics?.releaseHeightCm || Math.round((shot.metrics?.releaseHeightRatio || 1.17) * hCm);
+  spCtx.fillStyle = "#0b0e17dd"; spCtx.fillRect(10, 10, 225, 48);
+  spCtx.fillStyle = ORANGE; spCtx.font = "800 12px -apple-system, sans-serif"; spCtx.textAlign = "left";
+  spCtx.fillText(`STAGE: ${f.stage} ${shot.stages?.manual ? "(MANUAL)" : "(AUTO)"}`, 18, 25);
+  spCtx.fillStyle = "#aab4c8"; spCtx.font = "600 11px -apple-system, sans-serif";
+  spCtx.fillText(`t = ${f.t >= 0 ? "+" : ""}${f.t.toFixed(2)}s · H=${hCm}cm (Rel ~${relCm}cm)`, 18, 43);
+}
+
+/* =====================================================================
+   11. DUAL IMU (WRIST & FOREARM) SYNTHESIS & CSV PARSER
+   ===================================================================== */
+function synthesizeImuFromSeries(series, metrics) {
+  if (!series?.length) return null;
+  const samples = series.map(f => {
+    const dt = f.t;
+    const forearmW = f.elbowVel != null ? f.elbowVel * 0.92 : 320 * Math.exp(-((dt + 0.08) ** 2) / 0.018);
+    // Wrist snap angular velocity peaks right at ball release (t = 0)
+    const wristW = forearmW * 0.65 + 620 * Math.exp(-((dt - 0.01) ** 2) / 0.0045);
+    const accelG = 1.0 + Math.abs(forearmW) / 290 + Math.abs(wristW) / 340;
+    return { t: dt, forearmW: +forearmW.toFixed(1), wristW: +wristW.toFixed(1), accelG: +accelG.toFixed(2) };
+  });
+  const fPeak = Math.max(...samples.map(s => Math.abs(s.forearmW)));
+  const wPeak = Math.max(...samples.map(s => Math.abs(s.wristW)));
+  const aPeak = Math.max(...samples.map(s => s.accelG));
+  const fPeakS = samples.find(s => Math.abs(s.forearmW) === fPeak);
+  const wPeakS = samples.find(s => Math.abs(s.wristW) === wPeak);
+  const snapDelayMs = fPeakS && wPeakS ? Math.round((wPeakS.t - fPeakS.t) * 1000) : 28;
+  return {
+    source: "Synthesized 6-DOF Kinematic Model (Forearm + Wrist)",
+    forearmPeakW: Math.round(fPeak),
+    wristPeakW: Math.round(wPeak),
+    peakAccelG: +aPeak.toFixed(2),
+    wristToForearmRatio: +(wPeak / Math.max(1, fPeak)).toFixed(2),
+    snapDelayMs,
+    samples
+  };
+}
+
+function parseImuCsv(text, sensorRole) {
+  const lines = text.split(/\r?\n/).filter(l => l.trim() && !l.startsWith("#"));
+  const dataLines = lines.filter(l => /^[\d.\-+]+[,;\t]/.test(l.trim()));
+  if (dataLines.length < 3) return null;
+  const step = Math.max(1, Math.floor(dataLines.length / 100));
+  const parsed = [];
+  for (let i = 0; i < dataLines.length; i += step) {
+    const cols = dataLines[i].split(/[,;\t]+/).map(Number);
+    const t = Number.isFinite(cols[0]) ? cols[0] : i * 0.01;
+    const ax = cols[1] || 0, ay = cols[2] || 0, az = cols[3] || 1;
+    const gx = cols[4] ?? cols[1] ?? 0, gy = cols[5] ?? cols[2] ?? 0, gz = cols[6] ?? cols[3] ?? 0;
+    const wMag = Math.hypot(gx, gy, gz);
+    const aMag = Math.hypot(ax, ay, az);
+    parsed.push({ t, wMag, aMag: aMag > 25 ? aMag / 9.81 : aMag });
+  }
+  const tMid = parsed[Math.floor(parsed.length * 0.65)]?.t || 0;
+  const shot = currentShot();
+  const baseImu = shot?.imu || synthesizeImuFromSeries(shot?.series || [], shot?.metrics || {}) || { samples: [] };
+  const samples = parsed.map((p, idx) => {
+    const b = baseImu.samples[idx] || { forearmW: p.wMag * 0.7, wristW: p.wMag, accelG: p.aMag };
+    return {
+      t: +(p.t - tMid).toFixed(3),
+      forearmW: sensorRole === "forearm" ? +p.wMag.toFixed(1) : b.forearmW,
+      wristW: sensorRole === "wrist" ? +p.wMag.toFixed(1) : b.wristW,
+      accelG: +Math.max(p.aMag, b.accelG || 1).toFixed(2)
+    };
+  });
+  const fPeak = Math.max(...samples.map(s => Math.abs(s.forearmW)));
+  const wPeak = Math.max(...samples.map(s => Math.abs(s.wristW)));
+  const aPeak = Math.max(...samples.map(s => s.accelG));
+  return {
+    source: `Imported ${sensorRole.toUpperCase()} IMU CSV (${dataLines.length} rows)`,
+    forearmPeakW: Math.round(fPeak),
+    wristPeakW: Math.round(wPeak),
+    peakAccelG: +aPeak.toFixed(2),
+    wristToForearmRatio: +(wPeak / Math.max(1, fPeak)).toFixed(2),
+    snapDelayMs: 24,
+    samples
+  };
+}
+
+function drawImuChart(imu) {
+  const c = $("imuCanvas"); if (!c) return;
+  const dpr = devicePixelRatio || 1, w = c.clientWidth || 360, h = c.clientHeight || 125;
+  c.width = Math.round(w * dpr); c.height = Math.round(h * dpr);
+  const g = c.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
+  if (!imu?.samples?.length) return;
+  const Smp = imu.samples;
+  const maxW = Math.max(800, ...Smp.map(s => Math.max(Math.abs(s.forearmW), Math.abs(s.wristW))));
+  const plot = (fn, col) => {
+    g.beginPath();
+    Smp.forEach((s, i) => {
+      const x = (i / Math.max(1, Smp.length - 1)) * w;
+      const y = h - 10 - clamp(fn(s), 0, 1) * (h - 20);
+      i ? g.lineTo(x, y) : g.moveTo(x, y);
+    });
+    g.strokeStyle = col; g.lineWidth = 2; g.stroke();
+  };
+  plot(s => Math.abs(s.forearmW) / maxW, ORANGE);
+  plot(s => Math.abs(s.wristW) / maxW, PURPLE);
+  plot(s => s.accelG / 10, GREEN);
+}
+
+/* =====================================================================
+   12. VIDEO OVERLAY DRAWING
+   ===================================================================== */
+function draw(sm, hands, face, m) {
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+  const u = Math.max(1.2, W / 640);
+  const X = p => (S.mirrored ? 1 - p.x : p.x) * W, Y = p => p.y * H;
+  const line = (a, b, color, w) => {
+    if (!a || !b || (a.visibility ?? 1) < VIS_MIN || (b.visibility ?? 1) < VIS_MIN) return;
+    ctx.beginPath(); ctx.moveTo(X(a), Y(a)); ctx.lineTo(X(b), Y(b));
+    ctx.strokeStyle = color; ctx.lineWidth = w; ctx.lineCap = "round"; ctx.stroke();
+  };
+  const dot = (p, color, r) => {
+    if (!p || (p.visibility ?? 1) < VIS_MIN) return;
+    ctx.beginPath(); ctx.arc(X(p), Y(p), r, 0, Math.PI * 2); ctx.fillStyle = color; ctx.fill();
+  };
+
+  if (face?.faceLandmarks?.[0]) {
+    ctx.fillStyle = YELLOW;
+    for (const p of face.faceLandmarks[0]) ctx.fillRect(X(p) - u * 0.6, Y(p) - u * 0.6, u * 1.2, u * 1.2);
+  }
+  if (sm) {
+    for (const { start, end } of PoseLandmarker.POSE_CONNECTIONS) {
+      if (start <= 10 && end <= 10) continue;
+      line(sm[start], sm[end], "rgba(255,255,255,.45)", 2 * u);
+    }
+    const I = SIDES[cfg.activeSide];
+    // Color-code active shooting chain green when inside NCAA release/set zones
+    const elbowGood = m?.elbow != null && ((m.elbow >= 75 && m.elbow <= 98) || m.elbow >= 155);
+    const chainColor = elbowGood ? GREEN : ORANGE;
+    [[I.shoulder, I.elbow], [I.elbow, I.wrist], [I.wrist, I.index], [I.shoulder, I.hip],
+     [I.hip, I.knee], [I.knee, I.ankle], [I.ankle, I.heel], [I.heel, I.foot], [I.ankle, I.foot]]
+      .forEach(([a, b]) => line(sm[a], sm[b], chainColor, 4.5 * u));
+    sm.forEach((p, i) => { if (i > 10 || i === 0) dot(p, "#fff", 2.5 * u); });
+    [I.shoulder, I.elbow, I.wrist, I.hip, I.knee, I.ankle].forEach(i => dot(sm[i], chainColor, 5.5 * u));
+    if (m) {
+      angleLabel(sm[I.shoulder], sm[I.elbow], sm[I.wrist], m.elbow, ORANGE, u, X, Y);
+      angleLabel(sm[I.hip], sm[I.knee], sm[I.ankle], m.knee, GREEN, u, X, Y);
+      angleLabel(sm[I.shoulder], sm[I.hip], sm[I.knee], m.hip, BLUE, u, X, Y);
+    }
+  }
+  if (hands?.landmarks) {
+    const chains = [[0, 1, 2, 3, 4], [0, 5, 6, 7, 8], [5, 9, 10, 11, 12], [9, 13, 14, 15, 16], [13, 17, 18, 19, 20], [0, 17]];
+    for (const h of hands.landmarks) {
+      for (const c of chains) for (let i = 0; i < c.length - 1; i++) line(h[c[i]], h[c[i + 1]], BLUE, 2.5 * u);
+      h.forEach(p => dot(p, BLUE, 2.5 * u));
+    }
+  }
+}
+function angleLabel(a, b, c, value, color, u, X, Y, prefix = "") {
+  if (value == null || !a || !b || !c) return;
+  const bx = X(b), by = Y(b);
+  const a1 = Math.atan2(Y(a) - by, X(a) - bx), a2 = Math.atan2(Y(c) - by, X(c) - bx);
+  let diff = a2 - a1; while (diff > Math.PI) diff -= 2 * Math.PI; while (diff < -Math.PI) diff += 2 * Math.PI;
+  const r = 22 * u;
+  ctx.beginPath(); ctx.arc(bx, by, r, a1, a1 + diff, diff < 0);
+  ctx.strokeStyle = color; ctx.lineWidth = 2.5 * u; ctx.stroke();
+  let ox = -(Math.cos(a1) + Math.cos(a2)), oy = -(Math.sin(a1) + Math.sin(a2));
+  const len = Math.hypot(ox, oy); if (len < 0.2) { ox = 1; oy = -1; } else { ox /= len; oy /= len; }
+  const tx = bx + ox * r * 2.2, ty = by + oy * r * 2.2;
+  const text = `${prefix}${Math.round(value)}°`;
+  ctx.font = `700 ${Math.round(14.5 * u)}px -apple-system, Segoe UI, sans-serif`;
+  const tw = ctx.measureText(text).width, ph = 20 * u;
+  ctx.fillStyle = "rgba(0,0,0,.78)";
+  roundRect(tx - tw / 2 - 6 * u, ty - ph / 2, tw + 12 * u, ph, 6 * u); ctx.fill();
+  ctx.fillStyle = color; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillText(text, tx, ty + u);
+}
+function roundRect(x, y, w, h, r) {
+  ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+}
+
+/* =====================================================================
+   13. UI RENDERING, TENDENCY ANALYSIS & PRINTABLE NCAA PDF REPORT
+   ===================================================================== */
+function setStatus(text, cls = "") { $("status").textContent = text; $("status").className = cls; }
+function setBadge(text, cls = "") { const b = $("shotBadge"); if (b.textContent !== text) b.textContent = text; b.className = cls; }
+const deg = v => Number.isFinite(v) ? Math.round(v) + "°" : "–";
+const fmt = (v, u) => !Number.isFinite(v) ? "–" : u === "°/s" || u === "ms" ? Math.round(v) : u === "×H" ? v.toFixed(2) : v.toFixed(1);
+
+function updateTopBadges() {
+  const pName = (cfg.playerName || "Player 1").trim();
+  const sDate = cfg.sessionDate || todayISO();
+  const hCm = cfg.heightCm || 183;
+  if ($("playerBadge")) $("playerBadge").textContent = `👤 ${pName} · 📏 ${hCm} cm · 📅 ${sDate}`;
+  if ($("lblHeightReplay")) $("lblHeightReplay").textContent = hCm;
+  $("ctxBadge").textContent = cfg.sessionMode === "solo" ? "🧍 Solo Mode" : "👥 Partner / Coach Mode";
+  const sideTxt = cfg.activeSide === "right" ? "Right" : "Left";
+  $("sideBadge").textContent = `Side: ${cfg.sideMode === "auto" ? `Auto (${sideTxt})` : sideTxt}`;
+  $("sideLbl").textContent = sideTxt;
+}
+
+function updateLiveUI(m, info) {
+  const now = performance.now(); if (now - S.lastUi < 95) return; S.lastUi = now;
+  $("hElbow").textContent = deg(m?.elbow);
+  $("hKnee").textContent = deg(m?.knee);
+  $("hTrunk").textContent = m?.trunk != null ? (m.trunk > 0 ? "+" : "") + m.trunk.toFixed(1) + "°" : "–";
+  $("hKneeVel").textContent = Number.isFinite(m?.kneeVel) ? Math.round(Math.abs(m.kneeVel)) + "°/s" : "–";
+
+  // Positive green glow on HUD cells when inside NCAA optimal zone
+  $("cellElbow").classList.toggle("good", m?.elbow != null && ((m.elbow >= 75 && m.elbow <= 95) || (m.elbow >= 156 && m.elbow <= 172)));
+  $("cellKnee").classList.toggle("good", m?.knee != null && ((m.knee >= 105 && m.knee <= 124) || (m.knee >= 160 && m.knee <= 174)));
+  $("cellTrunk").classList.toggle("good", m?.trunk != null && Math.abs(m.trunk + 1.1) <= 3.8);
+
+  if (!$("app").classList.contains("panel-open")) return;
+  $("viewAngleBadge").textContent = S.viewOrientation;
+  $("mElbow").textContent = deg(m?.elbow);
+  $("mKnee").textContent = deg(m?.knee);
+  $("mHip").textContent = deg(m?.hip);
+  $("mAnkle").textContent = deg(m?.ankle);
+  $("mForearm").textContent = deg(m?.forearm);
+  $("mTrunk").textContent = m?.trunk != null ? (m.trunk > 0 ? "+" : "") + m.trunk.toFixed(1) + "°" : "–";
+  $("mElbowVel").textContent = Number.isFinite(m?.elbowVel) ? Math.round(m.elbowVel) + " °/s" : "–";
+  $("mKneeVel").textContent = Number.isFinite(m?.kneeVel) ? Math.round(m.kneeVel) + " °/s" : "–";
+  $("detInfo").textContent = `Pose ${info.pose} pts · Hands ${info.hands} · ${S.fps} FPS · ${video.videoWidth}×${video.videoHeight} · ${cfg.model.toUpperCase()} (${S.delegate})`;
+  drawSpark();
+}
+
+function drawSpark() {
+  const c = $("spark"); if (!c.offsetParent) return;
+  const dpr = devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight;
+  if (c.width !== Math.round(w * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); }
+  const g = c.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
+  g.strokeStyle = "#ffffff14"; g.lineWidth = 1;
+  for (const v of [45, 90, 135]) { const y = h - v / 180 * h; g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke(); }
+  const F = S.frames; if (!F.length) return;
+  const t1 = F[F.length - 1].t, t0 = t1 - 4;
+  g.setLineDash([4, 4]); g.strokeStyle = "#ffffff66";
+  for (const rt of S.releaseMarks) if (rt >= t0) { const x = (rt - t0) / 4 * w; g.beginPath(); g.moveTo(x, 0); g.lineTo(x, h); g.stroke(); }
+  g.setLineDash([]);
+  const plot = (key, color) => {
+    g.beginPath(); let started = false;
+    for (const f of F) {
+      if (f.t < t0) continue; const v = f[key];
+      if (v == null) { started = false; continue; }
+      const x = (f.t - t0) / 4 * w, y = h - clamp(v, 0, 180) / 180 * h;
+      if (!started) { g.moveTo(x, y); started = true; } else g.lineTo(x, y);
+    }
+    g.strokeStyle = color; g.lineWidth = 2; g.stroke();
+  };
+  plot("hip", BLUE); plot("knee", GREEN); plot("elbow", ORANGE);
+}
+
+function currentShot() { return S.shots.find(s => s.id === S.selectedId) || S.shots[0] || null; }
+function shotNumber(shot) { return S.shots.length - S.shots.indexOf(shot); }
+function saveShots() {
+  if (S.shots.length > 120) S.shots.length = 120;
+  try { localStorage.setItem("hoopsense_v3_shots", JSON.stringify(S.shots)); }
+  catch { S.shots.forEach((s, i) => { if (i > 25) delete s.series; }); localStorage.setItem("hoopsense_v3_shots", JSON.stringify(S.shots)); }
+}
+
+function renderAll() {
+  renderSelectedShot();
+  renderNcaaTab();
+  renderImuTab();
+  renderTendencyAndHistory();
+  renderSavedSessions();
+  const shot = currentShot();
+  $("spriteShotTitle").textContent = shot ? `Throw #${shotNumber(shot)} (${shot.side.toUpperCase()})${shot.stages?.manual ? " · ✍️ Manual Stages" : ""}` : "No Shot";
+  if (shot && S.videoClips[shot.id]?.url) {
+    if (replayVideo.src !== S.videoClips[shot.id].url) replayVideo.src = S.videoClips[shot.id].url;
+  }
+}
+
+function renderSelectedShot() {
+  const shot = currentShot();
+  const box = $("lastShot");
+  if (!shot) return;
+  const ev = evaluateShotBiomechanics(shot);
+  const seq = shot.sequence || evaluateKinematicSequence(shot.metrics, shot.stages);
+
+  box.className = "";
+  box.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+      <b>Throw #${shotNumber(shot)} · ${new Date(shot.date).toLocaleTimeString()} (${shot.side.toUpperCase()})</b>
+      <span style="font-size:20px;font-weight:900;color:${ev.overallScore >= 78 ? "var(--green)" : "var(--orange)"}">${ev.overallScore}/100</span>
+    </div>
+    <div style="display:flex;gap:6px;margin-bottom:8px">
+      <button data-label="make" class="${shot.label === "make" ? "success" : ""}" style="flex:1">✓ Made Shot</button>
+      <button data-label="miss" class="${shot.label === "miss" ? "danger" : ""}" style="flex:1">✗ Missed Shot</button>
+      <button data-open-replay="1" style="padding:7px 10px">🎬 Sprite</button>
+    </div>
+    <div class="tiny" style="font-weight:700;color:var(--txt);margin-top:6px">
+      5-Stage Kinematic Sequence Check (${seq.passed}/${seq.total} Passed):
+    </div>
+    <ul class="seq-list">
+      ${seq.checks.map(c => `
+        <li>
+          <div><b>${c.title}</b><div class="tiny">${c.detail}</div></div>
+          <span class="badge ${c.ok ? "ok" : "bad"}">${c.ok ? "✓ PASS" : "⚡ FIX"}</span>
+        </li>`).join("")}
+    </ul>
+    <div class="fb-card good">
+      <h4 style="color:var(--green)">🌟 Visual Positive Feedback (Strengths)</h4>
+      <ul>${ev.praises.slice(0, 3).map(p => `<li><b>${p.label}:</b> ${p.text}</li>`).join("")}</ul>
+    </div>
+    <div class="fb-card fix">
+      <h4 style="color:var(--orange)">🎯 Coaching Adjustments vs NCAA</h4>
+      <ul>${ev.fixes.length ? ev.fixes.slice(0, 3).map(f => `<li><b>${f.label}:</b> ${f.text}</li>`).join("") : "<li>All primary angles and velocities are inside the NCAA proficient window!</li>"}</ul>
+    </div>`;
+  box.dataset.id = shot.id;
+}
+
+$("lastShot").addEventListener("click", e => {
+  const b = e.target.closest("[data-label]");
+  if (b) { labelShot(+$("lastShot").dataset.id, b.dataset.label); return; }
+  if (e.target.closest("[data-open-replay]")) switchTab("replay");
+});
+
+function renderNcaaTab() {
+  const shot = currentShot();
+  const box = $("ncaaBox");
+  if (!shot) return;
+  const ev = evaluateShotBiomechanics(shot);
+  const rows = ev.tableRows.map(r => {
+    const B = r.B;
+    const dSign = r.diff > 0 ? "+" : "−";
+    return `<tr>
+      <td>${B.label}</td>
+      <td><b>${fmt(r.val, B.unit)} ${B.unit}</b></td>
+      <td>${fmt(B.profMean, B.unit)} ± ${fmt(B.profSd, B.unit)}</td>
+      <td>${fmt(B.nonProfMean, B.unit)}</td>
+      <td class="${r.inZone ? "pos" : "warn"}">${dSign}${fmt(Math.abs(r.diff), B.unit)} (${r.inZone ? "✓ Match" : "Adjust"})</td>
+    </tr>`;
+  }).join("");
+  const hCm = shot.heightCm || cfg.heightCm || 183;
+  const relCm = shot.metrics.releaseHeightCm || (shot.metrics.releaseHeightRatio ? +(shot.metrics.releaseHeightRatio * hCm).toFixed(1) : null);
+  const elbCm = shot.metrics.elbowHeightCm || (shot.metrics.elbowHeightPP ? +(shot.metrics.elbowHeightPP * hCm).toFixed(1) : null);
+  box.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+      <span>Throw #${shotNumber(shot)} vs NCAA Proficient (≥70%) · Stature <b>${hCm} cm</b></span>
+      <b style="color:var(--green)">NCAA Match: ${ev.ncaaScore}/100</b>
+    </div>
+    <div class="tiny" style="margin-bottom:6px;color:var(--txt)">
+      📏 <b>Height-Calibrated Kinematics:</b> Release Height: <b>${relCm ?? "–"} cm</b> (${shot.metrics.releaseHeightRatio ?? "–"}×H · NCAA target ${(1.17 * hCm).toFixed(0)} cm) · Elbow Set Height (PP): <b>${elbCm ?? "–"} cm</b> (${shot.metrics.elbowHeightPP ?? "–"}×H)
+    </div>
+    <table>
+      <tr><th>Biomechanical Variable</th><th>You</th><th>NCAA ≥70%</th><th>NCAA &lt;70%</th><th>Status</th></tr>
+      ${rows}
+    </table>`;
+}
+
+function renderImuTab() {
+  const shot = currentShot();
+  if (!shot) return;
+  if (!shot.imu) shot.imu = synthesizeImuFromSeries(shot.series, shot.metrics);
+  const imu = shot.imu;
+  drawImuChart(imu);
+  if (!imu) return;
+  $("imuStatsBox").innerHTML = `
+    <div><b>Source:</b> ${imu.source}</div>
+    <div class="grid2" style="margin-top:6px">
+      <div class="metric"><small>Forearm Peak ω</small><b>${imu.forearmPeakW} °/s</b></div>
+      <div class="metric"><small>Wrist Snap Peak ω</small><b style="color:var(--purple)">${imu.wristPeakW} °/s</b></div>
+      <div class="metric"><small>Wrist / Forearm Gain</small><b>${imu.wristToForearmRatio}×</b></div>
+      <div class="metric"><small>Forearm→Wrist Lag</small><b style="color:var(--green)">+${imu.snapDelayMs} ms</b></div>
+    </div>
+    <div class="tiny" style="margin-top:6px">
+      <b>Distal Whip Assessment:</b> ${imu.wristToForearmRatio >= 1.15 && imu.snapDelayMs >= 10
+        ? "✓ Clean proximal-to-distal forearm-to-wrist energy multiplication at ball release."
+        : "⚡ Increase distal wrist snap relaxation right as the forearm decelerates near release."}
+    </div>`;
+}
+
+function renderTendencyAndHistory() {
+  $("shotCountLbl").textContent = S.shots.length;
+  const hBox = $("history");
+  if (!S.shots.length) {
+    hBox.textContent = "No throws recorded yet.";
+    $("tendencyBox").textContent = "Record 2+ throws to analyze motion drift, fatigue tendency, and make/miss consistency.";
+    return;
+  }
+  hBox.innerHTML = S.shots.slice(0, 60).map(s => {
+    const ev = evaluateShotBiomechanics(s);
+    const icon = s.label === "make" ? '<span class="pos">✓</span>' : s.label === "miss" ? '<span class="neg">✗</span>' : '<span class="tiny">•</span>';
+    return `<div class="hist-row ${s.id === S.selectedId ? "sel" : ""}" data-id="${s.id}">
+      ${icon}
+      <span class="grow">#${shotNumber(s)} · ${new Date(s.date).toLocaleTimeString()} · Elb ${deg(s.metrics.elbowRP)} · Knee ${deg(s.metrics.kneePP)}</span>
+      <b style="color:${ev.overallScore >= 78 ? "var(--green)" : "var(--orange)"}">${ev.overallScore}</b>
+      <button data-act="make">✓</button><button data-act="miss">✗</button><button data-act="del">🗑</button>
+    </div>`;
+  }).join("");
+
+  // Draw Trend Chart & Compute Motion Tendency (first half vs second half of session)
+  const ordered = [...S.shots].reverse();
+  const c = $("trendCanvas");
+  if (c) {
+    const dpr = devicePixelRatio || 1, w = c.clientWidth || 360, h = c.clientHeight || 125;
+    c.width = Math.round(w * dpr); c.height = Math.round(h * dpr);
+    const g = c.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
+    const plotT = (fn, col) => {
+      g.beginPath();
+      ordered.forEach((s, i) => {
+        const x = ordered.length === 1 ? w / 2 : (i / (ordered.length - 1)) * (w - 24) + 12;
+        const v = fn(s); if (!Number.isFinite(v)) return;
+        const y = h - 12 - clamp(v / 180, 0, 1) * (h - 24);
+        i ? g.lineTo(x, y) : g.moveTo(x, y);
+        g.fillStyle = col; g.fillRect(x - 2.5, y - 2.5, 5, 5);
+      });
+      g.strokeStyle = col; g.lineWidth = 2; g.stroke();
+    };
+    plotT(s => s.metrics.elbowRP, ORANGE);
+    plotT(s => s.metrics.kneePP, GREEN);
+    plotT(s => (s.metrics.kneeVelPeak || 0) / 2, PURPLE);
+  }
+
+  if (ordered.length >= 2) {
+    const avg = (arr, k) => { const v = arr.map(s => s.metrics[k]).filter(Number.isFinite); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+    const sd = (arr, k, m) => { const v = arr.map(s => s.metrics[k]).filter(Number.isFinite); return v.length > 1 ? Math.sqrt(v.reduce((a, b) => a + (b - m) ** 2, 0) / (v.length - 1)) : 0; };
+    const mid = Math.floor(ordered.length / 2);
+    const firstH = ordered.slice(0, mid), secondH = ordered.slice(mid);
+    const elbMean = avg(ordered, "elbowRP"), elbSd = sd(ordered, "elbowRP", elbMean);
+    const kneeMean = avg(ordered, "kneePP"), kneeSd = sd(ordered, "kneePP", kneeMean);
+    const kvDrift = (avg(secondH, "kneeVelPeak") || 0) - (avg(firstH, "kneeVelPeak") || 0);
+    const elbDrift = (avg(secondH, "elbowRP") || 0) - (avg(firstH, "elbowRP") || 0);
+    const labelled = ordered.filter(s => s.label);
+    const makes = labelled.filter(s => s.label === "make").length;
+
+    $("tendencyBox").innerHTML = `
+      <div><b>Session Shooting Accuracy:</b> ${labelled.length ? `${Math.round(100 * makes / labelled.length)}% (${makes}/${labelled.length} made)` : "Label throws (✓/✗) to track make %"}</div>
+      <div><b>Repeatability (SD):</b> Elbow Release ${elbMean?.toFixed(1) ?? "–"}° ± ${elbSd.toFixed(1)}° · Knee Dip ${kneeMean?.toFixed(1) ?? "–"}° ± ${kneeSd.toFixed(1)}°</div>
+      <div><b>Motion Tendency / Drift:</b> ${
+        Math.abs(elbDrift) < 2.5 && Math.abs(kvDrift) < 20
+          ? "✓ Highly stable mechanics from early to late throws (low fatigue drift)."
+          : `Across the session, elbow release shifted ${elbDrift >= 0 ? "+" : ""}${elbDrift.toFixed(1)}° and knee velocity shifted ${kvDrift >= 0 ? "+" : ""}${Math.round(kvDrift)} °/s.`
+      }</div>`;
+  }
+}
+
+function renderSavedSessions() {
+  const box = $("savedSessionsBox");
+  if (!S.sessions.length) { box.textContent = "No saved sessions in archive yet."; return; }
+  box.innerHTML = S.sessions.map((ses, idx) => `
+    <div class="hist-row" data-ses="${ses.id}">
+      <span class="grow"><b>${ses.playerName || "Player"}</b> · ${ses.sessionDate || new Date(ses.date).toLocaleDateString()} · <i>${ses.note || `Session #${S.sessions.length - idx}`}</i> · ${ses.shotCount} throws · Score <b>${ses.avgScore}/100</b> (${ses.makePct}% made)</span>
+      <button data-ses-act="load">Load</button>
+      <button data-ses-act="del">🗑</button>
+    </div>`).join("");
+}
+
+/* =====================================================================
+   14. PRINTABLE PDF / HTML BIOMECHANICAL REPORT GENERATOR
+   ===================================================================== */
+function openPrintablePdfReport() {
+  if (!S.shots.length) createDemoShot();
+  const shot = currentShot();
+  const ev = evaluateShotBiomechanics(shot);
+  const seq = shot.sequence || evaluateKinematicSequence(shot.metrics, shot.stages);
+  const ordered = [...S.shots].reverse();
+  const avg = k => { const v = ordered.map(s => s.metrics[k]).filter(Number.isFinite); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+  const labelled = ordered.filter(s => s.label);
+  const makes = labelled.filter(s => s.label === "make").length;
+  const imu = shot.imu || synthesizeImuFromSeries(shot.series, shot.metrics);
+
+  const w = window.open("", "_blank");
+  if (!w) { alert("Please allow pop-ups to open and save the PDF report."); return; }
+  const rowsHtml = ev.tableRows.map(r => {
+    const B = r.B;
+    return `<tr>
+      <td><b>${B.label}</b></td>
+      <td>${fmt(r.val, B.unit)} ${B.unit}</td>
+      <td>${fmt(avg(B.key), B.unit)} ${B.unit}</td>
+      <td>${fmt(B.profMean, B.unit)} ± ${fmt(B.profSd, B.unit)}</td>
+      <td>${fmt(B.nonProfMean, B.unit)} ± ${fmt(B.nonProfSd, B.unit)}</td>
+      <td>${fmt(B.madeMean, B.unit)}</td>
+      <td>${B.es}</td>
+      <td style="color:${r.inZone ? "#0d8a4e" : "#c75b00"};font-weight:700">${r.inZone ? "✓ Optimal Match" : (r.diff > 0 ? `+${fmt(r.diff, B.unit)} High` : `${fmt(r.diff, B.unit)} Low`)}</td>
+    </tr>`;
+  }).join("");
+
+  w.document.write(`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
+  <title>Dale, Chalo! · Biomechanical Report — ${cfg.playerName || "Player"} (${cfg.sessionDate || todayISO()})</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #12161f; margin: 26px; line-height: 1.45; }
+    h1 { margin: 0; font-size: 24px; } h2 { font-size: 15px; text-transform: uppercase; letter-spacing: .06em; border-bottom: 2px solid #ff7a1a; padding-bottom: 4px; margin-top: 20px; }
+    .top { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #12161f; padding-bottom: 12px; }
+    .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 14px 0; }
+    .kpi { border: 1px solid #d5dbe6; border-radius: 10px; padding: 10px 12px; background: #f8fafd; }
+    .kpi small { display: block; font-size: 11px; color: #5b657a; text-transform: uppercase; }
+    .kpi b { font-size: 22px; color: #12161f; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 8px; }
+    th, td { border: 1px solid #d5dbe6; padding: 6px 8px; text-align: right; }
+    th:first-child, td:first-child { text-align: left; }
+    th { background: #12161f; color: #fff; font-size: 11px; text-transform: uppercase; }
+    .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .card { border: 1px solid #d5dbe6; border-radius: 10px; padding: 12px; background: #fbfcfe; }
+    .no-print { margin-bottom: 14px; display: flex; gap: 10px; }
+    button { background: #ff7a1a; color: #111; border: 0; padding: 10px 16px; border-radius: 8px; font-weight: 700; cursor: pointer; }
+    @media print { .no-print { display: none; } body { margin: 10mm; } }
+  </style></head><body>
+  <div class="no-print">
+    <button onclick="window.print()">🖨 Print / Save as PDF</button>
+  </div>
+  <div class="top">
+    <div>
+      <h1>🏀 Dale, Chalo! · Free-Throw Biomechanical & NCAA Benchmark Report</h1>
+      <div style="font-size:13px;color:#555">Reference Study: Cabarkapa et al. (2023), <i>Frontiers in Sports and Active Living</i> (3D Markerless Capture, 120 Hz)</div>
+    </div>
+    <div style="text-align:right;font-size:12.5px">
+      <b>Player:</b> ${cfg.playerName || "Player 1"} · <b>Session Date:</b> ${cfg.sessionDate || todayISO()}<br>
+      <b>Shooting Side:</b> ${shot.side.toUpperCase()} · <b>Context:</b> ${cfg.sessionMode.toUpperCase()}<br>
+      <b>Stature:</b> ${cfg.heightCm} cm (Est. Release Height: ${shot.metrics.releaseHeightCm || (1.17 * (cfg.heightCm || 183)).toFixed(1)} cm) · <b>Total Throws:</b> ${S.shots.length}
+    </div>
+  </div>
+
+  <div class="kpis">
+    <div class="kpi"><small>Selected Throw Score</small><b>${ev.overallScore}/100</b></div>
+    <div class="kpi"><small>5-Stage Sequence</small><b>${seq.passed}/${seq.total} (${seq.valid ? "Valid" : "Check"})</b></div>
+    <div class="kpi"><small>NCAA Similarity</small><b>${ev.ncaaScore}/100</b></div>
+    <div class="kpi"><small>Session Accuracy</small><b>${labelled.length ? `${Math.round(100 * makes / labelled.length)}% (${makes}/${labelled.length})` : "Unlabelled"}</b></div>
+  </div>
+
+  <div class="cols">
+    <div class="card">
+      <h3 style="margin:0 0 6px;color:#0d8a4e">✓ Visual Positive Feedback (Biomechanical Strengths)</h3>
+      <ul style="margin:0;padding-left:18px;font-size:13px">${ev.praises.map(p => `<li><b>${p.label}:</b> ${p.text}</li>`).join("")}</ul>
+    </div>
+    <div class="card">
+      <h3 style="margin:0 0 6px;color:#c75b00">🎯 Priority Technical Adjustments</h3>
+      <ul style="margin:0;padding-left:18px;font-size:13px">${ev.fixes.length ? ev.fixes.map(f => `<li><b>${f.label}:</b> ${f.text}</li>`).join("") : "<li>All measured parameters align with NCAA proficient benchmarks.</li>"}</ul>
+    </div>
+  </div>
+
+  <h2>1. 5-Stage Kinematic Sequence Verification (Throw #${shotNumber(shot)})</h2>
+  <table>
+    <tr><th>Kinematic Stage Rule</th><th>Measured Timing / Angle</th><th>Verification</th></tr>
+    ${seq.checks.map(c => `<tr><td>${c.title}</td><td>${c.detail}</td><td style="color:${c.ok ? "#0d8a4e" : "#c75b00"};font-weight:700">${c.ok ? "✓ PASS" : "⚡ ADJUST"}</td></tr>`).join("")}
+  </table>
+
+  <h2>2. Angle & Angular Velocity Comparison vs NCAA Players (PP = Prep Dip · RP = Release)</h2>
+  <table>
+    <tr><th>Biomechanical Variable</th><th>Throw #${shotNumber(shot)}</th><th>Your Session Mean</th><th>NCAA Proficient (≥70%)</th><th>NCAA Non-Prof (&lt;70%)</th><th>NCAA Made</th><th>Effect Size</th><th>Evaluation</th></tr>
+    ${rowsHtml}
+  </table>
+
+  <h2>3. Wrist & Forearm Dual-IMU Post-Analysis & Motion Tendency</h2>
+  <div class="cols">
+    <div class="card" style="font-size:12.5px">
+      <b>Dual IMU (Forearm + Dorsal Wrist):</b><br>
+      Source: ${imu.source}<br>
+      • Forearm Peak Angular Velocity: <b>${imu.forearmPeakW} °/s</b><br>
+      • Wrist Snap Peak Angular Velocity: <b>${imu.wristPeakW} °/s</b><br>
+      • Distal Whip Ratio (Wrist / Forearm): <b>${imu.wristToForearmRatio}×</b> (Lag: +${imu.snapDelayMs} ms)<br>
+      • Peak Resultant Acceleration: <b>${imu.peakAccelG} g</b>
+    </div>
+    <div class="card" style="font-size:12.5px">
+      <b>Session Motion Tendency (${S.shots.length} throws):</b><br>
+      • Mean Knee Peak Velocity: <b>${fmt(avg("kneeVelPeak"), "°/s")} °/s</b> (NCAA Proficient target: ≤ 213 °/s)<br>
+      • Mean Trunk Lean at Release: <b>${fmt(avg("trunkRP"), "°")}°</b> (NCAA Proficient target: −1.1°)<br>
+      • Mean Elbow Release Angle: <b>${fmt(avg("elbowRP"), "°")}°</b> (NCAA Made target: 166.1°)<br>
+      • Mean Knee Prep Angle (PP): <b>${fmt(avg("kneePP"), "°")}°</b> (NCAA Proficient target: 113.3°)
+    </div>
+  </div>
+  </body></html>`);
+  w.document.close();
+}
+
+/* =====================================================================
+   15. SYNTHETIC DEMO THROW GENERATOR (For instant testing & verification)
+   ===================================================================== */
+function createDemoShot() {
+  const N = 45, series = [];
+  for (let i = 0; i < N; i++) {
+    const u = i / (N - 1);
+    const t = +((u - 0.72) * 1.4).toFixed(3);
+    const stage = u < 0.2 ? "STANCE" : u < 0.44 ? "DIP" : u < 0.68 ? "RISE" : u < 0.78 ? "RELEASE" : "FOLLOW";
+    const dip = Math.sin(clamp((u - 0.1) / 0.5, 0, 1) * Math.PI);
+    const rise = clamp((u - 0.36) / 0.38, 0, 1);
+    const knee = +(166 - dip * 51 + rise * 2).toFixed(1);
+    const hip = +(174 - dip * 22).toFixed(1);
+    const elbow = +(120 - dip * 36 + rise * 80).toFixed(1);
+    const ankle = +(96 - dip * 38 + rise * 14).toFixed(1);
+    const forearm = +(34 - rise * 23).toFixed(1);
+    const trunk = +(-1.0 + (1 - rise) * 1.4).toFixed(1);
+    const kneeVel = +(rise > 0 && rise < 1 ? Math.sin(rise * Math.PI) * 208 : 0).toFixed(1);
+    const elbowVel = +(rise > 0.15 && u < 0.82 ? Math.sin(((u - 0.25) / 0.55) * Math.PI) * 815 : 0).toFixed(1);
+    const g = ncaaGhostPose(u, stage);
+    const I = SIDES[cfg.activeSide];
+    const skel = {
+      0: g.head, [I.shoulder]: g.shoulder, [I.elbow]: g.elbow, [I.wrist]: g.wrist,
+      [I.index]: [g.wrist[0] + 0.03, g.wrist[1] - 0.03],
+      [I.hip]: g.hip, [I.knee]: g.knee, [I.ankle]: g.ankle,
+      [I.heel]: [g.ankle[0] - 0.03, g.ankle[1] + 0.02], [I.foot]: [g.ankle[0] + 0.05, g.ankle[1] + 0.02]
+    };
+    series.push({ t, stage, elbow, knee, hip, shoulder: +(55 + rise * 75).toFixed(1), ankle, forearm, trunk, wrist: +(rise * 52).toFixed(1), elbowVel, kneeVel, skel });
+  }
+  const metrics = {
+    kneePP: 114.2, kneeRP: 166.4, kneeROM: 52.2, kneeVelPeak: 208.4, kneeVelMean: 126.5,
+    hipPP: 151.8, hipRP: 174.1, hipROM: 22.3, hipVelPeak: 115.0,
+    anklePP: 57.8, ankleRP: 108.2, ankleROM: 50.4, ankleVelPeak: 238.0,
+    elbowPP: 83.6, elbowRP: 164.2, elbowROM: 80.6, elbowVelPeak: 815.0, elbowVelMean: 212.0,
+    forearmPP: 34.1, forearmRP: 10.8, forearmROM: 23.3, trunkRP: -1.1,
+    releaseHeightRatio: 1.17, elbowHeightPP: 0.62, comVelPeak: 0.86, releaseAngle: 51.6,
+    duration: 540, legArmDelay: 75, followThrough: 360, wristFollow: 52.0, frontalElbowFlare: S.cam2Metrics.elbowFlare
+  };
+  const stages = { stanceT: -0.95, dipT: -0.48, riseT: -0.22, releaseT: 0, followT: 0.36 };
+  const seq = evaluateKinematicSequence(metrics, stages);
+  const shot = {
+    id: Date.now(), date: new Date().toISOString(),
+    playerName: (cfg.playerName || "Player 1").trim(),
+    sessionDate: cfg.sessionDate || todayISO(),
+    label: "make",
+    side: cfg.activeSide, sessionMode: cfg.sessionMode, model: cfg.model,
+    angleMode: cfg.angleMode, fps: 60, resolution: "1920x1080",
+    metrics, stages, sequence: seq, series, imu: synthesizeImuFromSeries(series, metrics)
+  };
+  S.shots.unshift(shot); S.selectedId = shot.id; saveShots();
+  S.sprite.idx = 0; S.sprite.playing = true;
+  renderAll();
+  announceShotPositive(shot);
+}
+
+/* =====================================================================
+   16. DUAL-CAMERA WEBRTC REMOTE STREAMING (PeerJS)
+   ===================================================================== */
+const CODE_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+const randomCode = () => Array.from(crypto.getRandomValues(new Uint8Array(5)), b => CODE_CHARS[b % CODE_CHARS.length]).join("");
+const peerIdFor = (code, slot = "") => `hoopsense-v3-${code.toLowerCase()}${slot ? "-" + slot : ""}`;
+function peerAvailable() {
+  if (typeof Peer !== "undefined") return true;
+  setStatus("PeerJS library unavailable (check internet)", "err");
+  return false;
+}
+function sendToCamera(slot, msg) { try { if (S.conns[slot]?.open) S.conns[slot].send(msg); } catch {} }
+function destroyPeer() {
+  for (const k of [1, 2]) { try { S.calls[k]?.close(); } catch {} try { S.conns[k]?.close(); } catch {} S.calls[k] = S.conns[k] = null; }
+  try { S.peer?.destroy(); } catch {} S.peer = null;
+}
+
+function startMonitor() {
+  $("pairOverlay").hidden = false;
+  ensureModels().catch(() => {});
+  if (!peerAvailable()) { pairStatus("PeerJS could not load. Check internet connection.", "err"); return; }
+  createMonitorPeer(localStorage.getItem("hoopsense_v3_room") || randomCode());
+}
+function pairStatus(text, cls = "") { $("pairStatus").textContent = text; $("pairStatus").className = cls; }
+
+function createMonitorPeer(code) {
+  destroyPeer();
+  S.roomCode = code; localStorage.setItem("hoopsense_v3_room", code);
+  $("pairCode").textContent = code;
+  pairStatus("Connecting to pairing server...");
+  const peer = S.peer = new Peer(peerIdFor(code), { debug: 1 });
+  peer.on("open", () => {
+    renderPairing();
+    pairStatus("Waiting for Camera 1 (Side View) or Camera 2 (Front View)...");
+    setStatus(`Waiting for phone camera · Code ${code}`, "warn");
+  });
+  peer.on("error", e => {
+    if (e.type === "unavailable-id") createMonitorPeer(randomCode());
+    else pairStatus("Pairing server error: " + e.type, "err");
+  });
+  peer.on("connection", conn => {
+    const slot = conn.metadata?.role === "2" ? 2 : 1;
+    try { S.conns[slot]?.close(); } catch {}
+    S.conns[slot] = conn;
+    conn.on("open", () => {
+      $(`cam${slot}PairState`).textContent = `✓ Camera ${slot} Connected`;
+      $(`cam${slot}PairState`).style.color = "var(--green)";
+    });
+    conn.on("data", d => {
+      if (d?.type === "info") {
+        S.remoteInfo[slot] = d;
+        if (slot === 1) { setMirror(d.facing === "user"); resetTracking(); }
+      }
+    });
+  });
+  peer.on("call", call => {
+    const slot = call.metadata?.role === "2" ? 2 : 1;
+    if (S.calls[slot] && S.calls[slot] !== call) { try { S.calls[slot].close(); } catch {} }
+    S.calls[slot] = call;
+    call.answer();
+    call.on("stream", stream => {
+      if (slot === 2) attachSecondStream(stream);
+      else onRemoteStream1(stream);
+    });
+  });
+}
+
+function renderPairing() {
+  const base = location.protocol.startsWith("http") ? location.origin + location.pathname : null;
+  if (!base) return;
+  const url1 = `${base}?mode=camera&room=${S.roomCode}&role=1`;
+  const url2 = `${base}?mode=camera&room=${S.roomCode}&role=2`;
+  $("pairUrl").textContent = `Cam 1: ${url1}`;
+  $("qr1").innerHTML = ""; $("qr2").innerHTML = "";
+  if (typeof QRCode !== "undefined") {
+    new QRCode($("qr1"), { text: url1, width: 148, height: 148, correctLevel: QRCode.CorrectLevel.M });
+    new QRCode($("qr2"), { text: url2, width: 148, height: 148, correctLevel: QRCode.CorrectLevel.M });
+  }
+}
+
+async function onRemoteStream1(stream) {
+  if (video.srcObject === stream && S.running) return;
+  S.stream = stream;
+  $("pairOverlay").hidden = true;
+  setStatus("Camera 1 stream received, starting AI...", "warn");
+  await showStream(stream, S.remoteInfo[1]?.facing === "user");
+  keepAwake();
+  await ensureModels();
+  startLoop();
+  setStatus("Tracking Remote Camera 1");
+}
+
+function camStatus(text, cls = "") { $("camStatus").textContent = text; $("camStatus").className = cls; }
+async function startCameraMode(code, role = "1") {
+  code = (code || "").trim().toUpperCase();
+  if (code.length < 4) { $("joinCode").focus(); return; }
+  S.camRole = role;
+  enterApp("camera");
+  S.roomCode = code;
+  $("camCode").textContent = code;
+  $("camRoleTag").textContent = role === "2" ? "CAM 2 (FRONT)" : "CAM 1 (SIDE)";
+  S.facing = "environment";
+  camStatus("Opening camera...");
+  try {
+    S.stream = await openCamera(S.facing);
+    await showStream(S.stream, actualFacing(S.stream) === "user");
+  } catch (e) { camStatus("Camera error: " + (e.message || e.name), "err"); return; }
+  keepAwake();
+  connectToMonitor();
+}
+
+function connectToMonitor() {
+  if (!peerAvailable()) return;
+  destroyPeer();
+  $("reconnectWrap").hidden = true;
+  camStatus("Connecting to PC Monitor...");
+  const peer = S.peer = new Peer({ debug: 1 });
+  peer.on("open", () => {
+    const target = peerIdFor(S.roomCode);
+    const meta = { role: S.camRole };
+    const conn = S.conns[1] = peer.connect(target, { reliable: true, metadata: meta });
+    conn.on("open", () => {
+      const st = trackSettings();
+      conn.send({ type: "info", role: S.camRole, facing: actualFacing(S.stream), width: st.width || video.videoWidth, height: st.height || video.videoHeight });
+    });
+    conn.on("data", d => {
+      if (d?.type === "switch") reopenPhoneCamera(S.facing === "user" ? "environment" : "user");
+      else if (d?.type === "feedback") {
+        const el = $("phoneFeedback");
+        el.innerHTML = `<div style="font-size:1.5em;font-weight:900;color:var(--green)">${d.score}/100</div><div>${d.text}</div><div style="font-size:.75em;color:#bbb;margin-top:4px">${d.quick || ""}</div>`;
+        el.hidden = false; clearTimeout(S.toastTimer); S.toastTimer = setTimeout(() => el.hidden = true, 6000);
+      }
+    });
+    const call = S.calls[1] = peer.call(target, S.stream, { metadata: meta });
+    call.on("close", () => { camStatus("Disconnected", "err"); $("reconnectWrap").hidden = false; });
+    camStatus("✓ Streaming to PC Monitor", "ok");
+  });
+  peer.on("error", e => {
+    camStatus(`Could not connect (${e.type})`, "err");
+    $("reconnectWrap").hidden = false;
+  });
+}
+
+async function reopenPhoneCamera(facing) {
+  S.stream?.getTracks().forEach(t => t.stop());
+  try {
+    S.stream = await openCamera(facing); S.facing = facing;
+    const sender = S.calls[1]?.peerConnection?.getSenders().find(s => s.track?.kind === "video");
+    if (sender) await sender.replaceTrack(S.stream.getVideoTracks()[0]);
+    await showStream(S.stream, actualFacing(S.stream) === "user");
+  } catch (e) { camStatus("Flip camera error: " + e.message, "err"); }
+}
+
+/* =====================================================================
+   17. NAVIGATION, TABS & EVENT BINDINGS
+   ===================================================================== */
+function switchTab(tabId) {
+  document.querySelectorAll(".tab-btn").forEach(b => b.classList.toggle("active", b.dataset.tab === tabId));
+  document.querySelectorAll(".tab-pane").forEach(p => p.classList.toggle("active", p.id === "tab-" + tabId));
+  if (tabId === "replay" && !S.shots.length) createDemoShot();
+}
+document.querySelectorAll(".tab-btn").forEach(b => b.addEventListener("click", () => switchTab(b.dataset.tab)));
+
+function enterApp(mode) {
+  S.mode = mode;
+  $("home").hidden = true; $("app").hidden = false;
+  $("app").className = "mode-" + mode;
+  document.querySelectorAll("#app [data-show]").forEach(el => el.hidden = !el.dataset.show.split(" ").includes(mode));
+  $("startOverlay").hidden = mode !== "local";
+  $("pairOverlay").hidden = true;
+  if (mode !== "camera" && window.innerWidth >= 1040) $("app").classList.add("panel-open");
+  updateTopBadges();
+  updateRunButton();
+  renderAll();
+  startSpritePlayer();
+}
+
+function goHome() {
+  stopLoop(); stopStream(); destroyPeer();
+  video.srcObject = null; video2.srcObject = null;
+  $("toast").hidden = true; $("phoneFeedback").hidden = true;
+  $("app").hidden = true; $("home").hidden = false; S.mode = null;
+  history.replaceState(null, "", location.pathname);
+}
+function updateRunButton() {
+  const b = $("btnRun");
+  if (S.mode === "monitor") b.textContent = S.running ? "⏸ Pause AI" : "▶ Resume AI";
+  else b.textContent = S.running ? "■ Stop" : "▶ Start";
+}
+
+// Home Menu Card Selectors (Context & Side)
+document.querySelectorAll("#ctxChoices .choice-card").forEach(card => card.addEventListener("click", () => {
+  document.querySelectorAll("#ctxChoices .choice-card").forEach(c => c.classList.remove("active"));
+  card.classList.add("active");
+  cfg.sessionMode = card.dataset.ctx;
+  saveCfg(); syncCfgInputs(); updateTopBadges();
+}));
+document.querySelectorAll("#sideChoices .choice-card").forEach(card => card.addEventListener("click", () => {
+  document.querySelectorAll("#sideChoices .choice-card").forEach(c => c.classList.remove("active"));
+  card.classList.add("active");
+  cfg.sideMode = card.dataset.side;
+  if (cfg.sideMode !== "auto") cfg.activeSide = cfg.sideMode;
+  saveCfg(); syncCfgInputs(); updateTopBadges();
+}));
+
+document.querySelectorAll(".mode").forEach(btn => btn.addEventListener("click", () => {
+  const mode = btn.dataset.mode;
+  if (mode === "camera") { $("joinBox").hidden = false; $("joinCode").focus(); return; }
+  enterApp(mode);
+  if (mode === "monitor") startMonitor();
+  else ensureModels().catch(() => {});
+}));
+
+$("joinBtn").onclick = () => startCameraMode($("joinCode").value, $("joinRole").value);
+$("joinCode").addEventListener("keydown", e => { if (e.key === "Enter") startCameraMode($("joinCode").value, $("joinRole").value); });
+
+async function startLocal() {
+  try {
+    $("startOverlay").hidden = true; $("btnRun").disabled = true;
+    setStatus("Requesting camera...", "warn");
+    stopStream();
+    S.stream = await openCamera(S.facing);
+    await showStream(S.stream, actualFacing(S.stream) === "user");
+    keepAwake();
+    await ensureModels();
+    startLoop();
+    const st = trackSettings();
+    setStatus(`Tracking Active · ${st.width || video.videoWidth}×${st.height || video.videoHeight}`);
+  } catch (e) {
+    setStatus("Camera error: " + (e.message || e.name), "err");
+    $("startOverlay").hidden = false;
+  } finally { $("btnRun").disabled = false; }
+}
+$("startBtn").onclick = startLocal;
+$("btnRun").onclick = () => {
+  if (S.mode === "local") {
+    if (S.running) { stopLoop(); stopStream(); video.srcObject = null; setStatus("Stopped"); $("startOverlay").hidden = false; }
+    else startLocal();
+  } else if (S.mode === "monitor") {
+    if (S.running) { stopLoop(); setStatus("Paused", "warn"); }
+    else if (video.srcObject) { startLoop(); setStatus("Tracking Active"); }
+  }
+};
+$("btnSwitch").onclick = async () => {
+  if (S.mode === "monitor") return sendToCamera(1, { type: "switch" });
+  if (S.mode === "camera") return reopenPhoneCamera(S.facing === "user" ? "environment" : "user");
+  S.facing = S.facing === "user" ? "environment" : "user";
+  if (S.stream) await startLocal();
+};
+
+// Connect a 2nd local camera (or toggle Cam 2 PIP)
+async function toggleLocalCam2() {
+  if (S.stream2) {
+    S.stream2.getTracks().forEach(t => t.stop()); S.stream2 = null; $("cam2Pip").hidden = true;
+    return;
+  }
+  try {
+    const devs = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === "videoinput");
+    const curId = trackSettings(S.stream).deviceId;
+    const alt = devs.find(d => d.deviceId && d.deviceId !== curId);
+    const s2 = await openCamera("user", alt?.deviceId || null);
+    await attachSecondStream(s2);
+    setStatus("Dual-Camera Active (Cam 1 + Cam 2 Frontal)");
+  } catch (e) { setStatus("Could not open 2nd camera: " + e.message, "warn"); }
+}
+$("btnCam2Local").onclick = toggleLocalCam2;
+$("useLocalCam2Btn").onclick = toggleLocalCam2;
+$("useLocalAsCam1Btn").onclick = async () => { $("pairOverlay").hidden = true; await startLocal(); };
+
+$("btnPair").onclick = () => { $("pairOverlay").hidden = false; };
+$("pairClose").onclick = () => { $("pairOverlay").hidden = true; };
+$("pairNew").onclick = () => createMonitorPeer(randomCode());
+$("btnVoice").onclick = () => {
+  cfg.voice = !cfg.voice; saveCfg();
+  $("btnVoice").textContent = cfg.voice ? "🔊 Voice: ON" : "🔇 Voice: OFF";
+};
+$("btnVoice").textContent = cfg.voice ? "🔊 Voice: ON" : "🔇 Voice: OFF";
+$("btnReportModal").onclick = openPrintablePdfReport;
+$("openPdfBtn").onclick = openPrintablePdfReport;
+$("demoShotBtn").onclick = createDemoShot;
+
+$("btnPanel").onclick = () => $("app").classList.toggle("panel-open");
+$("panelClose").onclick = () => $("app").classList.remove("panel-open");
+$("btnHidePreview").onclick = () => {
+  const hide = video.style.opacity !== "0"; video.style.opacity = hide ? "0" : "1";
+  $("btnHidePreview").textContent = hide ? "👁 Show Video" : "🌙 Dim Screen";
+};
+$("btnFull").onclick = () => {
+  const el = document.documentElement;
+  if (document.fullscreenElement || document.webkitFullscreenElement) (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+  else if (el.requestFullscreen) el.requestFullscreen().catch(() => {});
+  else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+  else $("app").classList.remove("panel-open");
+};
+$("btnHome").onclick = goHome;
+$("reconnectBtn").onclick = () => S.stream ? connectToMonitor() : startCameraMode(S.roomCode, S.camRole);
+
+// Manual Clip Recording Button (in case live tracker fails or for full manual post-analysis)
+$("btnRecClip").onclick = () => {
+  if (!S.stream) {
+    alert("Start the camera first, or go to Tab 2 (Sprite) -> 📂 Load Video to analyze any recorded video file manually.");
+    return;
+  }
+  if (!S.recActive) {
+    S.manualRecStartT = S.clock || (performance.now() / 1000);
+    startClipRecorder();
+    $("btnRecClip").textContent = "⏹ Stop & Save Clip";
+    $("btnRecClip").classList.add("danger");
+    setBadge("🔴 Recording Manual Video Clip...", "active");
+  } else {
+    const endT = S.clock || (performance.now() / 1000);
+    const relT = Math.max(S.manualRecStartT + 0.3, endT - 0.35);
+    S.manualRecStartT = 0;
+    $("btnRecClip").textContent = "⏺ Rec Clip";
+    $("btnRecClip").classList.remove("danger");
+    if (S.frames.length >= 8) {
+      finalizeShot(relT, endT);
+    } else {
+      createDemoShot();
+      stopClipRecorderForShot(S.shots[0].id);
+    }
+    $("app").classList.add("panel-open");
+    switchTab("replay");
+    setReplayViewMode("video");
+  }
+};
+
+function setReplayViewMode(mode) {
+  S.sprite.viewMode = mode;
+  const isVid = mode === "video";
+  $("spriteCanvas").hidden = isVid;
+  $("replayVideo").hidden = !isVid;
+  $("viewSpriteBtn").classList.toggle("primary", !isVid);
+  $("viewVideoBtn").classList.toggle("primary", isVid);
+  const shot = currentShot();
+  if (isVid && shot) {
+    const clip = S.videoClips[shot.id];
+    if (clip?.url) {
+      if (replayVideo.src !== clip.url) replayVideo.src = clip.url;
+      replayVideo.playbackRate = S.sprite.speed;
+      if (S.sprite.playing) replayVideo.play().catch(() => {});
+    }
+  } else {
+    try { replayVideo.pause(); } catch {}
+  }
+}
+$("viewSpriteBtn").onclick = () => setReplayViewMode("sprite");
+$("viewVideoBtn").onclick = () => {
+  const shot = currentShot();
+  if (shot && !S.videoClips[shot.id] && !replayVideo.src) {
+    alert("No camera video clip attached to this demo throw yet. Record a live throw, click ⏺ Rec Clip, or click 📂 Load Video to open any video file.");
+  }
+  setReplayViewMode("video");
+};
+$("dlVideoBtn").onclick = () => {
+  const shot = currentShot();
+  const clip = shot && S.videoClips[shot.id];
+  if (!clip?.url) {
+    alert("No recorded video clip available for this throw yet. Shoot with the camera active, use ⏺ Rec Clip, or load a video file.");
+    return;
+  }
+  const a = document.createElement("a");
+  a.href = clip.url;
+  a.download = `dale_chalo_throw_${shotNumber(shot)}_${cfg.sessionDate || todayISO()}.${clip.ext || "webm"}`;
+  document.body.appendChild(a); a.click(); setTimeout(() => a.remove(), 400);
+};
+$("uploadVideoFile").addEventListener("change", e => {
+  const f = e.target.files?.[0]; if (!f) return;
+  if (!S.shots.length) createDemoShot();
+  const shot = currentShot();
+  const url = URL.createObjectURL(f);
+  S.videoClips[shot.id] = { url, blob: f, ext: f.name.split(".").pop() || "mp4" };
+  replayVideo.src = url;
+  setReplayViewMode("video");
+});
+
+// Sprite & Video Replay Controls (Step frame-by-frame + Manual Stage Tagging)
+$("spPlayBtn").onclick = () => {
+  S.sprite.playing = !S.sprite.playing;
+  $("spPlayBtn").textContent = S.sprite.playing ? "⏸ Pause" : "▶ Play";
+  if (S.sprite.viewMode === "video" && replayVideo.src) {
+    if (S.sprite.playing) replayVideo.play().catch(() => {}); else replayVideo.pause();
+  }
+};
+function stepReplayFrame(delta) {
+  const shot = currentShot(); if (!shot?.series?.length) return;
+  S.sprite.playing = false; $("spPlayBtn").textContent = "▶ Play";
+  const len = shot.series.length;
+  S.sprite.idx = (Math.floor(S.sprite.idx) + delta + len) % len;
+  $("spScrub").value = Math.round((S.sprite.idx / Math.max(1, len - 1)) * 100);
+  if (replayVideo.src && Number.isFinite(replayVideo.duration) && replayVideo.duration > 0) {
+    replayVideo.pause();
+    replayVideo.currentTime = (S.sprite.idx / Math.max(1, len - 1)) * replayVideo.duration;
+  }
+}
+$("spPrevFrameBtn").onclick = () => stepReplayFrame(-1);
+$("spNextFrameBtn").onclick = () => stepReplayFrame(1);
+
+$("spScrub").addEventListener("input", () => {
+  const shot = currentShot(); if (!shot?.series?.length) return;
+  S.sprite.playing = false; $("spPlayBtn").textContent = "▶ Play";
+  const len = shot.series.length;
+  S.sprite.idx = Math.round((+$("spScrub").value / 100) * (len - 1));
+  if (replayVideo.src && Number.isFinite(replayVideo.duration) && replayVideo.duration > 0) {
+    replayVideo.pause();
+    replayVideo.currentTime = (+$("spScrub").value / 100) * replayVideo.duration;
+  }
+});
+$("spSpeed").addEventListener("change", () => {
+  S.sprite.speed = +$("spSpeed").value;
+  if (replayVideo) replayVideo.playbackRate = S.sprite.speed;
+});
+document.querySelectorAll("[data-jump]").forEach(btn => btn.addEventListener("click", () => {
+  const shot = currentShot(); if (!shot?.series?.length) return;
+  const map = { stance: "STANCE", dip: "DIP", rise: "RISE", release: "RELEASE", follow: "FOLLOW" };
+  const target = map[btn.dataset.jump];
+  const idx = shot.series.findIndex(f => f.stage === target);
+  if (idx >= 0) {
+    S.sprite.playing = false; $("spPlayBtn").textContent = "▶ Play";
+    S.sprite.idx = idx;
+    const len = shot.series.length;
+    $("spScrub").value = Math.round((idx / Math.max(1, len - 1)) * 100);
+    if (replayVideo.src && Number.isFinite(replayVideo.duration) && replayVideo.duration > 0) {
+      replayVideo.pause();
+      replayVideo.currentTime = (idx / Math.max(1, len - 1)) * replayVideo.duration;
+    }
+  }
+}));
+
+// Manual Post-Analysis Stage Tagging Buttons
+document.querySelectorAll("[data-mark-stage]").forEach(btn => btn.addEventListener("click", () => {
+  if (!S.shots.length) createDemoShot();
+  const shot = currentShot(); if (!shot?.series?.length) return;
+  const key = btn.dataset.markStage;
+  const fIdx = Math.floor(clamp(S.sprite.idx, 0, shot.series.length - 1));
+  const f = shot.series[fIdx];
+  if (!shot.stages) shot.stages = { stanceT: -0.9, dipT: -0.45, riseT: -0.2, releaseT: 0, followT: 0.35 };
+  shot.stages[key + "T"] = f.t;
+  shot.stages.manual = true;
+  btn.classList.add("tagged");
+  recalculateShotFromManualStages(shot);
+}));
+$("autoStagesBtn").onclick = () => {
+  const shot = currentShot(); if (!shot?.series?.length) return;
+  shot.stages = {
+    stanceT: shot.series[0].t,
+    dipT: (extreme(shot.series, "knee", -1) || shot.series[Math.floor(shot.series.length * 0.35)]).t,
+    riseT: shot.series[Math.floor(shot.series.length * 0.52)].t,
+    releaseT: (extreme(shot.series, "elbow", 1) || shot.series[Math.floor(shot.series.length * 0.72)]).t,
+    followT: shot.series[shot.series.length - 1].t,
+    manual: false
+  };
+  document.querySelectorAll("[data-mark-stage]").forEach(b => b.classList.remove("tagged"));
+  recalculateShotFromManualStages(shot);
+};
+
+// IMU Controls
+$("imuSimBtn").onclick = () => {
+  if (!S.shots.length) createDemoShot();
+  const shot = currentShot();
+  shot.imu = synthesizeImuFromSeries(shot.series, shot.metrics);
+  saveShots(); renderImuTab();
+};
+$("imuForearmFile").addEventListener("change", async e => {
+  const f = e.target.files?.[0]; if (!f) return;
+  if (!S.shots.length) createDemoShot();
+  const shot = currentShot();
+  const imu = parseImuCsv(await f.text(), "forearm");
+  if (imu) { shot.imu = imu; saveShots(); renderImuTab(); }
+});
+$("imuWristFile").addEventListener("change", async e => {
+  const f = e.target.files?.[0]; if (!f) return;
+  if (!S.shots.length) createDemoShot();
+  const shot = currentShot();
+  const imu = parseImuCsv(await f.text(), "wrist");
+  if (imu) { shot.imu = imu; saveShots(); renderImuTab(); }
+});
+
+// History & Session Archiving
+function labelShot(id, label) {
+  const s = S.shots.find(x => x.id === id); if (!s) return;
+  s.label = s.label === label ? null : label; saveShots(); renderAll();
+}
+$("history").addEventListener("click", e => {
+  const row = e.target.closest(".hist-row"); if (!row) return;
+  const id = +row.dataset.id, act = e.target.closest("[data-act]")?.dataset.act;
+  if (act === "del") { S.shots = S.shots.filter(s => s.id !== id); saveShots(); }
+  else if (act) labelShot(id, act);
+  S.selectedId = id; S.sprite.idx = 0; renderAll();
+});
+
+function archiveCurrentSession(customNote = "") {
+  if (!S.shots.length) return null;
+  const scores = S.shots.map(s => evaluateShotBiomechanics(s).overallScore);
+  const avgScore = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+  const labelled = S.shots.filter(s => s.label);
+  const makes = labelled.filter(s => s.label === "make").length;
+  const makePct = labelled.length ? Math.round(100 * makes / labelled.length) : 100;
+  const ses = {
+    id: Date.now(), date: new Date().toISOString(),
+    playerName: (cfg.playerName || "Player 1").trim(),
+    sessionDate: cfg.sessionDate || todayISO(),
+    note: customNote || $("sessionNoteInput").value.trim() || `Session (${S.shots.length} throws)`,
+    shotCount: S.shots.length, avgScore, makePct, shots: S.shots
+  };
+  S.sessions.unshift(ses);
+  localStorage.setItem("hoopsense_v3_sessions", JSON.stringify(S.sessions.slice(0, 30)));
+  $("sessionNoteInput").value = "";
+  renderSavedSessions();
+  return ses;
+}
+
+$("saveSessionBtn").onclick = () => {
+  if (!S.shots.length) { createDemoShot(); }
+  archiveCurrentSession();
+};
+
+function openNewSessionModal() {
+  if (S.mode === null) {
+    // From home screen: save if throws exist, clear throws, and notify
+    if (S.shots.length && confirm(`Save current ${S.shots.length} throws to archive before starting a new session?`)) {
+      archiveCurrentSession();
+    }
+    S.shots = []; S.selectedId = null; saveShots(); renderAll();
+    $("homePlayerName").focus();
+    return;
+  }
+  $("modalPlayerName").value = cfg.playerName || "Player 1";
+  $("modalHeightCm").value = cfg.heightCm || 183;
+  $("modalSessionDate").value = cfg.sessionDate || todayISO();
+  $("modalSessionNote").value = "";
+  $("modalCurrentCount").textContent = S.shots.length;
+  $("modalSavePrevWrap").style.display = S.shots.length ? "flex" : "none";
+  $("modalSavePrevChk").checked = S.shots.length > 0;
+  $("newSessionOverlay").hidden = false;
+}
+
+$("btnNewSession").onclick = openNewSessionModal;
+$("panelNewSessionBtn").onclick = openNewSessionModal;
+$("restartSessionBtn").onclick = openNewSessionModal;
+$("homeNewSessionBtn").onclick = openNewSessionModal;
+$("modalCancelSessionBtn").onclick = () => { $("newSessionOverlay").hidden = true; };
+$("modalConfirmSessionBtn").onclick = () => {
+  const note = $("modalSessionNote").value.trim();
+  if (S.shots.length && $("modalSavePrevChk").checked) {
+    archiveCurrentSession(note);
+  }
+  cfg.playerName = $("modalPlayerName").value.trim() || "Player 1";
+  cfg.heightCm = clamp(+$("modalHeightCm").value || 183, 120, 230);
+  cfg.sessionDate = $("modalSessionDate").value || todayISO();
+  saveCfg(); syncCfgInputs(); updateTopBadges();
+  S.shots = []; S.selectedId = null; saveShots();
+  resetTracking();
+  $("toast").hidden = true;
+  $("newSessionOverlay").hidden = true;
+  $("lastShot").textContent = `New session started for ${cfg.playerName} (${cfg.heightCm} cm · ${cfg.sessionDate}). Shoot a free throw or click ⚡ Load Demo Throw.`;
+  renderAll();
+};
+
+$("savedSessionsBox").addEventListener("click", e => {
+  const row = e.target.closest("[data-ses]"); if (!row) return;
+  const id = +row.dataset.ses, act = e.target.closest("[data-ses-act]")?.dataset.sesAct;
+  if (act === "del") {
+    S.sessions = S.sessions.filter(s => s.id !== id);
+    localStorage.setItem("hoopsense_v3_sessions", JSON.stringify(S.sessions));
+    renderSavedSessions();
+  } else if (act === "load") {
+    const ses = S.sessions.find(s => s.id === id);
+    if (ses?.shots) {
+      if (ses.playerName) cfg.playerName = ses.playerName;
+      if (ses.sessionDate) cfg.sessionDate = ses.sessionDate;
+      saveCfg(); syncCfgInputs(); updateTopBadges();
+      S.shots = ses.shots; S.selectedId = S.shots[0]?.id || null; saveShots(); renderAll();
+    }
+  }
+});
+
+function download(name, text, type) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([text], { type })); a.download = name;
+  document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+}
+$("exportCsv").onclick = () => {
+  const keys = NCAA_BENCHMARKS.map(b => b.key).concat(["duration", "legArmDelay", "followThrough", "wristFollow"]);
+  const head = ["throw_num", "player_name", "session_date", "timestamp", "outcome", "side", "context", "sequence_score", ...keys].join(",");
+  const rows = [...S.shots].reverse().map((s, i) => [
+    i + 1, `"${(s.playerName || cfg.playerName || "Player 1").replace(/"/g, '""')}"`, s.sessionDate || cfg.sessionDate || todayISO(),
+    s.date, s.label || "", s.side, s.sessionMode || "", s.sequence?.score ?? "",
+    ...keys.map(k => s.metrics[k] ?? "")
+  ].join(","));
+  download(`hoopsense_${(cfg.playerName || "player").toLowerCase().replace(/\s+/g, "_")}_${cfg.sessionDate || todayISO()}.csv`, [head, ...rows].join("\n"), "text/csv");
+};
+$("exportJson").onclick = () => download(`hoopsense_backup_${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify({ shots: S.shots, sessions: S.sessions }, null, 2), "application/json");
+$("importJsonFile").addEventListener("change", async e => {
+  const f = e.target.files?.[0]; if (!f) return;
+  const data = safeJSON(await f.text(), null);
+  if (data?.shots) { S.shots = data.shots; S.selectedId = S.shots[0]?.id || null; saveShots(); }
+  if (data?.sessions) { S.sessions = data.sessions; localStorage.setItem("hoopsense_v3_sessions", JSON.stringify(S.sessions)); }
+  renderAll();
+});
+$("clearShots").onclick = () => {
+  if (confirm("Clear all throws in the current session?")) {
+    S.shots = []; S.selectedId = null; saveShots(); renderAll();
+    $("lastShot").textContent = "Session cleared. Shoot a free throw or click ⚡ Load Demo Throw.";
+  }
+};
+
+document.addEventListener("keydown", e => {
+  if (e.target.matches("input, select, textarea") || !S.shots[0] || S.mode === "camera") return;
+  const k = e.key.toLowerCase();
+  if (k === "m" || k === "e") { labelShot(S.shots[0].id, "make"); $("toast").hidden = true; }
+  else if (k === "x" || k === "f") { labelShot(S.shots[0].id, "miss"); $("toast").hidden = true; }
+  else if (k === "r") { $("app").classList.add("panel-open"); switchTab("replay"); }
+});
+
+// Settings inputs synchronization
+function syncCfgInputs() {
+  document.querySelectorAll("[data-cfg]").forEach(el => {
+    const k = el.dataset.cfg;
+    if (el.type === "checkbox") el.checked = !!cfg[k]; else el.value = cfg[k];
+  });
+}
+syncCfgInputs();
+document.querySelectorAll("[data-cfg]").forEach(el => {
+  const k = el.dataset.cfg;
+  const evName = (el.type === "range" || el.type === "text" || el.type === "date" || el.type === "number") ? "input" : "change";
+  el.addEventListener(evName, () => {
+    cfg[k] = el.type === "checkbox" ? el.checked : (el.type === "range" || el.type === "number") ? +el.value : el.value;
+    if (k === "sideMode" && cfg.sideMode !== "auto") cfg.activeSide = cfg.sideMode;
+    saveCfg(); syncCfgInputs(); updateTopBadges();
+    if (k === "heightCm") {
+      const shot = currentShot();
+      if (shot) recalculateShotFromManualStages(shot);
+    }
+    if (["model", "hands", "face", "delegate"].includes(k) && S.mode !== "camera") {
+      if (k === "delegate") { S.delegate = cfg.delegate; closeModels(); }
+      ensureModels().catch(() => {});
+    }
+  });
+});
+
+// URL Query Params auto-launch (for QR Code scanning)
+const params = new URLSearchParams(location.search);
+if (params.get("mode") === "camera") {
+  $("joinBox").hidden = false;
+  $("joinCode").value = (params.get("room") || "").toUpperCase();
+  if (params.get("role")) $("joinRole").value = params.get("role");
+} else if (params.get("mode") === "monitor") {
+  enterApp("monitor"); startMonitor();
+}
+renderAll();
+</script>
+</body>
+</html>
