@@ -1,0 +1,1409 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0d0f13">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>HoopSense · BodyTrack v2</title>
+  <!-- PeerJS: conexión WebRTC celular -> computadora (solo se usa para emparejar; el video viaja directo entre equipos) -->
+  <script defer src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <!-- Generador de código QR para emparejar el celular -->
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <style>
+    :root {
+      --bg: #0d0f13; --panel: #14171d; --card: #1c2028; --line: #2a303b;
+      --txt: #f2f4f8; --muted: #9aa3b2; --orange: #ff7a1a; --green: #3ddc84;
+      --red: #ff5a5f; --blue: #5ec8ff; --yellow: #ffd84d;
+    }
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    html, body {
+      margin: 0; height: 100%; background: var(--bg); color: var(--txt); overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+    button {
+      font: inherit; color: inherit; background: var(--card); border: 1px solid var(--line);
+      border-radius: 12px; padding: 10px 14px; cursor: pointer; font-size: 15px;
+    }
+    button:hover { border-color: #3b4352; }
+    button.primary { background: var(--orange); border-color: var(--orange); color: #111; font-weight: 700; }
+    button:disabled { opacity: .45; cursor: default; }
+    select, input[type=text] {
+      font: inherit; color: var(--txt); background: #0f1217; border: 1px solid var(--line);
+      border-radius: 10px; padding: 8px 10px; font-size: 14px;
+    }
+    input[type=range] { width: 140px; accent-color: var(--orange); }
+    input[type=checkbox] { width: 20px; height: 20px; accent-color: var(--orange); }
+
+    /* ---------- Pantalla de inicio ---------- */
+    #home {
+      position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+      padding: 24px; overflow-y: auto;
+      background: radial-gradient(circle at 20% 0%, #2a1a0d 0%, var(--bg) 55%);
+    }
+    .home-card { width: 100%; max-width: 540px; }
+    .logo { font-size: 34px; font-weight: 800; letter-spacing: -.02em; }
+    .logo span { color: var(--orange); }
+    .sub { color: var(--muted); margin: 6px 0 18px; }
+    .mode { display: block; width: 100%; text-align: left; margin: 10px 0; padding: 16px 18px; border-radius: 16px; }
+    .mode b { display: block; font-size: 17px; margin-bottom: 4px; }
+    .mode span { color: var(--muted); font-size: 13px; line-height: 1.4; }
+    .mode.rec { border-color: var(--orange); }
+    #joinBox { display: flex; gap: 8px; margin: 6px 0 12px; }
+    #joinBox input { flex: 1; font-size: 22px; letter-spacing: .2em; text-transform: uppercase; text-align: center; }
+    .privacy { color: #7d8594; font-size: 12px; line-height: 1.5; margin-top: 18px; }
+
+    /* ---------- App ---------- */
+    #app { position: fixed; inset: 0; display: grid; grid-template-columns: minmax(0, 1fr); }
+    @media (min-width: 1000px) { #app.panel-open { grid-template-columns: minmax(0, 1fr) 410px; } }
+    #stage { position: relative; overflow: hidden; background: #000; min-width: 0; min-height: 0; }
+    #video, #canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+    #video.mirror { transform: scaleX(-1); }
+    #topbar {
+      position: absolute; top: 0; left: 0; right: 0; z-index: 5; pointer-events: none;
+      display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;
+      padding: calc(env(safe-area-inset-top) + 10px) 14px 18px;
+      background: linear-gradient(#000c, transparent);
+    }
+    .brand { font-weight: 800; font-size: 17px; }
+    .brand small { color: var(--muted); font-weight: 500; font-size: 12px; margin-left: 6px; }
+    #status { font-size: 13px; color: var(--green); text-align: right; max-width: 60%; }
+    #status.err { color: var(--red); } #status.warn { color: var(--yellow); }
+    #hud {
+      position: absolute; left: 12px; top: calc(env(safe-area-inset-top) + 54px); z-index: 5;
+      display: grid; grid-template-columns: repeat(2, auto); gap: 8px; pointer-events: none;
+    }
+    .hcell { background: #000b; border: 1px solid #ffffff22; border-radius: 12px; padding: 6px 12px; min-width: 104px; }
+    .hcell small { display: block; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
+    .hcell b { font-size: clamp(22px, 3vw, 46px); font-variant-numeric: tabular-nums; line-height: 1.1; }
+    .hcell.o b { color: var(--orange); } .hcell.g b { color: var(--green); } .hcell.b b { color: var(--blue); }
+    #shotBadge {
+      position: absolute; right: 12px; top: calc(env(safe-area-inset-top) + 54px); z-index: 5;
+      background: #000b; border: 1px solid #ffffff22; border-radius: 999px; padding: 8px 14px; font-size: 14px;
+      max-width: 50%; text-align: right;
+    }
+    #shotBadge.active { border-color: var(--orange); color: var(--orange); }
+    #shotBadge.warn { border-color: var(--yellow); color: var(--yellow); }
+    #toast {
+      position: absolute; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 84px); transform: translateX(-50%);
+      width: max-content; max-width: min(94%, 760px); z-index: 7;
+      background: #000e; border: 2px solid var(--orange); border-radius: 18px; padding: 14px 18px;
+      font-size: clamp(15px, 2vw, 24px); line-height: 1.4; text-align: center;
+    }
+    #toast .score { font-size: 1.5em; font-weight: 800; }
+    #toast .btns { margin-top: 10px; display: flex; gap: 10px; justify-content: center; }
+    #controls {
+      position: absolute; left: 0; right: 0; bottom: 0; z-index: 6;
+      display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;
+      padding: 18px 10px calc(env(safe-area-inset-bottom) + 12px);
+      background: linear-gradient(transparent, #000c);
+    }
+    #controls button { background: #1c2028dd; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+    .overlay {
+      position: absolute; inset: 0; z-index: 8; display: flex; align-items: center; justify-content: center;
+      padding: 20px; background: #000c; overflow-y: auto;
+    }
+    .ocard {
+      background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 22px;
+      max-width: 460px; width: 100%; text-align: center; line-height: 1.5;
+    }
+    .ocard h2 { margin: 0 0 8px; font-size: 20px; }
+    .ocard p, .ocard li { color: var(--muted); font-size: 14px; }
+    .ocard ul { text-align: left; padding-left: 20px; }
+    #qr { background: #fff; padding: 12px; border-radius: 12px; display: inline-block; margin: 8px 0; min-height: 40px; }
+    .code { font-size: 40px; letter-spacing: .22em; font-weight: 800; color: var(--orange); }
+    .url { font-size: 12px; color: var(--muted); word-break: break-all; }
+    #pairStatus.err, #camStatus.err { color: var(--red); }
+    #pairStatus.ok, #camStatus.ok { color: var(--green); }
+    #camOverlay {
+      position: absolute; left: 12px; right: 12px; top: calc(env(safe-area-inset-top) + 54px); z-index: 5;
+      display: flex; justify-content: center;
+    }
+    #camOverlay .box { background: #000c; border: 1px solid #ffffff22; border-radius: 14px; padding: 10px 14px; text-align: center; font-size: 14px; }
+    #phoneFeedback {
+      position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 7;
+      background: #000d; border: 2px solid var(--orange); border-radius: 18px; padding: 16px 20px;
+      font-size: 20px; text-align: center; max-width: 90%;
+    }
+
+    /* ---------- Panel lateral ---------- */
+    #panel { display: none; background: var(--panel); overflow-y: auto; padding: 14px; border-left: 1px solid var(--line); }
+    #app.panel-open #panel { display: block; }
+    @media (max-width: 999px) {
+      #panel {
+        position: fixed; left: 0; right: 0; bottom: 0; max-height: 72dvh; z-index: 30;
+        border-radius: 18px 18px 0 0; border-left: 0; border-top: 1px solid var(--line);
+        padding-bottom: calc(env(safe-area-inset-bottom) + 16px); box-shadow: 0 -10px 40px #000a;
+      }
+    }
+    .panel-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    .sec { background: var(--card); border-radius: 14px; padding: 12px; margin-bottom: 12px; }
+    .sec h3 { margin: 0 0 10px; font-size: 12px; text-transform: uppercase; color: var(--muted); letter-spacing: .07em; }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .metric { background: #0004; border-radius: 10px; padding: 8px 10px; }
+    .metric small { color: var(--muted); font-size: 11px; display: block; }
+    .metric b { font-size: 22px; font-variant-numeric: tabular-nums; }
+    #spark { width: 100%; height: 120px; display: block; margin-top: 10px; background: #0004; border-radius: 10px; }
+    .legend { font-size: 12px; color: var(--muted); margin-top: 6px; display: flex; gap: 12px; flex-wrap: wrap; }
+    .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+    .tiny { font-size: 12px; color: var(--muted); line-height: 1.5; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    td, th { padding: 5px 3px; border-bottom: 1px solid var(--line); text-align: right; font-variant-numeric: tabular-nums; }
+    td:first-child, th:first-child { text-align: left; color: var(--muted); }
+    th { color: var(--muted); font-weight: 500; font-size: 11px; }
+    .pos { color: var(--green); } .neg { color: var(--red); } .warn { color: var(--yellow); }
+    .shot-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .score-badge { font-weight: 800; font-size: 22px; }
+    .label-btns { display: flex; gap: 8px; margin: 8px 0; }
+    .label-btns button { flex: 1; }
+    .label-btns button.sel-make { background: #1d4d33; border-color: var(--green); }
+    .label-btns button.sel-miss { background: #4d1d1f; border-color: var(--red); }
+    .fb { margin: 8px 0 0; padding-left: 18px; font-size: 14px; line-height: 1.5; }
+    .hist-row { display: flex; align-items: center; gap: 6px; padding: 6px 4px; border-bottom: 1px solid var(--line); font-size: 13px; cursor: pointer; }
+    .hist-row:hover { background: #ffffff08; }
+    .hist-row.sel { background: #ff7a1a1a; }
+    .hist-row .grow { flex: 1; }
+    .hist-row button { padding: 3px 8px; font-size: 12px; border-radius: 8px; }
+    .row-btns { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+    label.row { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin: 10px 0; font-size: 14px; }
+    label.row span small { display: block; color: var(--muted); font-size: 11px; }
+    .tips li { margin-bottom: 6px; }
+    kbd { background: #0006; border: 1px solid var(--line); border-radius: 5px; padding: 0 5px; font-size: 12px; }
+  </style>
+</head>
+<body>
+
+<!-- ===================== INICIO ===================== -->
+<section id="home">
+  <div class="home-card">
+    <div class="logo">🏀 Hoop<span>Sense</span></div>
+    <div class="sub">Análisis biomecánico del tiro libre en tiempo real · BodyTrack v2</div>
+
+    <button class="mode rec" data-mode="monitor">
+      <b>💻 Monitor en la computadora</b>
+      <span>Recomendado. Recibe el video del celular, analiza con el modelo más preciso y muestra la retroalimentación en grande en la PC.</span>
+    </button>
+    <button class="mode" data-mode="camera">
+      <b>🎥 Usar este celular como cámara</b>
+      <span>Deja el celular fijo (trípode) al costado de tu brazo de tiro y transmite el video a la computadora.</span>
+    </button>
+    <div id="joinBox" hidden>
+      <input id="joinCode" type="text" placeholder="CÓDIGO" maxlength="6" autocomplete="off" autocapitalize="characters" spellcheck="false">
+      <button id="joinBtn" class="primary">Conectar</button>
+    </div>
+    <button class="mode" data-mode="local">
+      <b>📱 Analizar en este dispositivo</b>
+      <span>Usa la cámara de este mismo equipo y muestra todo aquí (como la versión 1).</span>
+    </button>
+
+    <p class="privacy">
+      🔒 El análisis se hace en el navegador. En modo remoto el video viaja directamente del celular a tu
+      computadora por WebRTC cifrado (el servidor de PeerJS solo ayuda a que los dos equipos se encuentren).
+      No se graba ni se sube video. La primera carga necesita internet para descargar los modelos de IA.
+    </p>
+  </div>
+</section>
+
+<!-- ===================== APP ===================== -->
+<main id="app" hidden>
+  <div id="stage">
+    <video id="video" autoplay playsinline muted></video>
+    <canvas id="canvas"></canvas>
+
+    <div id="topbar">
+      <div class="brand">🏀 HoopSense <small id="modeTag"></small></div>
+      <div id="status">Listo</div>
+    </div>
+
+    <div id="hud" data-show="local monitor">
+      <div class="hcell o"><small>Codo</small><b id="hElbow">–</b></div>
+      <div class="hcell g"><small>Flexión rodilla</small><b id="hKnee">–</b></div>
+      <div class="hcell b"><small>Hombro</small><b id="hShoulder">–</b></div>
+      <div class="hcell o"><small>Vel. codo °/s</small><b id="hElbowVel">–</b></div>
+    </div>
+    <div id="shotBadge" data-show="local monitor">Esperando tiro</div>
+
+    <div id="camOverlay" data-show="camera">
+      <div class="box">
+        Código <b id="camCode" style="color:var(--orange);letter-spacing:.15em">—</b> ·
+        <span id="camStatus">Preparando...</span>
+        <div id="reconnectWrap" hidden style="margin-top:8px"><button id="reconnectBtn" class="primary">Reconectar</button></div>
+      </div>
+    </div>
+    <div id="phoneFeedback" hidden></div>
+    <div id="toast" hidden></div>
+
+    <!-- Overlay de inicio (modo local) -->
+    <div id="startOverlay" class="overlay" hidden>
+      <div class="ocard">
+        <h2>Coloca la cámara</h2>
+        <ul>
+          <li>De <b>costado</b> al jugador, del lado de la <b>mano de tiro</b>, a 3–5 m.</li>
+          <li>A la altura de la cadera, nivelada (sin inclinar) y fija.</li>
+          <li>Que se vea el <b>cuerpo completo</b> (pies a manos arriba) con buena luz.</li>
+        </ul>
+        <button id="startBtn" class="primary" style="font-size:18px;padding:14px 22px">▶ Iniciar cámara</button>
+      </div>
+    </div>
+
+    <!-- Overlay de emparejamiento (modo monitor) -->
+    <div id="pairOverlay" class="overlay" hidden>
+      <div class="ocard">
+        <h2>Conecta tu celular</h2>
+        <p>Escanea el QR con la cámara del iPhone, o abre esta misma página en el celular, elige
+          <b>“Usar este celular como cámara”</b> y escribe el código:</p>
+        <div class="code" id="pairCode">·····</div>
+        <div id="qr"></div>
+        <div class="url" id="pairUrl"></div>
+        <p id="pairStatus">Conectando al servidor de emparejamiento...</p>
+        <button id="pairClose">Cerrar</button>
+        <button id="pairNew">Nuevo código</button>
+      </div>
+    </div>
+
+    <div id="controls">
+      <button id="btnRun" data-show="local monitor">▶ Iniciar</button>
+      <button id="btnSwitch" data-show="local monitor camera">🔄 Cambiar cámara</button>
+      <button id="btnPair" data-show="monitor">📲 Emparejar</button>
+      <button id="btnHidePreview" data-show="camera">🌙 Ocultar vista</button>
+      <button id="btnPanel" data-show="local monitor">📊 Panel</button>
+      <button id="btnFull" data-show="local monitor camera">⛶ Pantalla completa</button>
+      <button id="btnHome">⌂ Inicio</button>
+    </div>
+  </div>
+
+  <!-- ===================== PANEL ===================== -->
+  <aside id="panel">
+    <div class="panel-head">
+      <b>Análisis del tiro libre</b>
+      <button id="panelClose">✕</button>
+    </div>
+
+    <div class="sec">
+      <h3>En vivo (lado <span id="sideLbl">derecho</span>)</h3>
+      <div class="grid2">
+        <div class="metric"><small>Codo (ángulo interno)</small><b id="mElbow">–</b></div>
+        <div class="metric"><small>Flexión de rodilla</small><b id="mKnee">–</b></div>
+        <div class="metric"><small>Hombro (elevación brazo)</small><b id="mShoulder">–</b></div>
+        <div class="metric"><small>Cadera (tronco-muslo)</small><b id="mHip">–</b></div>
+        <div class="metric"><small>Antebrazo vs vertical</small><b id="mForearm">–</b></div>
+        <div class="metric"><small>Flexión de muñeca</small><b id="mWrist">–</b></div>
+        <div class="metric"><small>Vel. angular codo</small><b id="mElbowVel">–</b></div>
+        <div class="metric"><small>Vel. angular rodilla</small><b id="mKneeVel">–</b></div>
+      </div>
+      <canvas id="spark"></canvas>
+      <div class="legend">
+        <span><i style="background:var(--orange)"></i>Codo</span>
+        <span><i style="background:var(--green)"></i>Flex. rodilla</span>
+        <span><i style="background:var(--blue)"></i>Hombro</span>
+        <span>últimos 4 s · 0–180°</span>
+      </div>
+      <div class="tiny" id="detInfo" style="margin-top:6px">—</div>
+    </div>
+
+    <div class="sec">
+      <h3>Tiro seleccionado</h3>
+      <div id="lastShot" class="tiny">Aún no se detectan tiros. Lanza un tiro libre: se detecta automáticamente
+        al subir la muñeca sobre el hombro, extender el codo y bajar el brazo.</div>
+    </div>
+
+    <div class="sec">
+      <h3>Referencia personal (tiros encestados)</h3>
+      <div id="refBox" class="tiny"></div>
+    </div>
+
+    <div class="sec">
+      <h3>Historial</h3>
+      <div id="history" class="tiny">Sin tiros todavía.</div>
+      <div class="row-btns">
+        <button id="exportCsv">⬇ CSV</button>
+        <button id="exportJson">⬇ JSON (con series)</button>
+        <button id="clearShots">🗑 Borrar todo</button>
+      </div>
+      <div class="tiny" style="margin-top:8px">Atajos en la PC: <kbd>E</kbd> encestado · <kbd>F</kbd> fallado (último tiro).</div>
+    </div>
+
+    <div class="sec">
+      <h3>Ajustes de precisión</h3>
+      <label class="row"><span>Mano de tiro</span>
+        <select data-cfg="side"><option value="right">Derecha</option><option value="left">Izquierda</option></select></label>
+      <label class="row"><span>Modelo de pose<small>Heavy = más preciso, más lento</small></span>
+        <select data-cfg="model"><option value="lite">Lite (rápido)</option><option value="full">Full (equilibrado)</option><option value="heavy">Heavy (máxima precisión)</option></select></label>
+      <label class="row"><span>Cálculo de ángulos<small>2D es el estándar con cámara lateral</small></span>
+        <select data-cfg="angleMode"><option value="2d">2D plano sagital</option><option value="3d">3D (world landmarks)</option></select></label>
+      <label class="row"><span>Suavizado (filtro One-Euro)<small>Menos temblor ↔ menos retraso</small></span>
+        <input type="range" min="0" max="1" step="0.05" data-cfg="smoothing"></label>
+      <label class="row"><span>Resolución de cámara</span>
+        <select data-cfg="resolution"><option value="720">1280×720</option><option value="1080">1920×1080</option></select></label>
+      <label class="row"><span>Procesador</span>
+        <select data-cfg="delegate"><option value="GPU">GPU (recomendado)</option><option value="CPU">CPU</option></select></label>
+      <label class="row"><span>Detectar manos<small>Mejora la muñeca en el follow-through</small></span>
+        <input type="checkbox" data-cfg="hands"></label>
+      <label class="row"><span>Detectar cara<small>No necesario para el tiro; consume recursos</small></span>
+        <input type="checkbox" data-cfg="face"></label>
+    </div>
+
+    <div class="sec tiny tips">
+      <h3>Para medir con precisión</h3>
+      <ul style="padding-left:18px;margin:0">
+        <li>Cámara <b>lateral, fija y nivelada</b>, perpendicular a la línea de tiro, del lado de la mano de tiro.</li>
+        <li>Cuerpo completo en cuadro, ocupando ~70% de la altura de la imagen.</li>
+        <li>Buena luz y fondo sin otras personas. Ropa ajustada ayuda.</li>
+        <li>En la PC usa el modelo <b>Heavy</b>; en el celular <b>Full</b>.</li>
+        <li>Etiqueta al menos 3 tiros encestados para crear tu referencia; cada tiro nuevo se compara con ella.</li>
+      </ul>
+    </div>
+  </aside>
+</main>
+
+<script type="module">
+import {
+  FilesetResolver, PoseLandmarker, HandLandmarker, FaceLandmarker
+} from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
+
+/* =====================================================================
+   CONFIGURACIÓN
+   ===================================================================== */
+const $ = id => document.getElementById(id);
+const VERSION = "0.10.14";
+const WASM_PATH = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${VERSION}/wasm`;
+const MP = "https://storage.googleapis.com/mediapipe-models";
+const MODEL_URLS = {
+  pose: {
+    lite:  `${MP}/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task`,
+    full:  `${MP}/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task`,
+    heavy: `${MP}/pose_landmarker/pose_landmarker_heavy/float16/1/pose_landmarker_heavy.task`
+  },
+  hand: `${MP}/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task`,
+  face: `${MP}/face_landmarker/face_landmarker/float16/1/face_landmarker.task`
+};
+const ORANGE = "#ff7a1a", GREEN = "#3ddc84", BLUE = "#5ec8ff", YELLOW = "#ffd84d";
+const VIS_MIN = 0.5;          // visibilidad mínima de un landmark para usarlo en mediciones
+const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ||
+                 (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent));
+
+// Índices de MediaPipe Pose (lado anatómico del jugador)
+const SIDES = {
+  right: { shoulder: 12, elbow: 14, wrist: 16, index: 20, hip: 24, knee: 26, ankle: 28, heel: 30, foot: 32 },
+  left:  { shoulder: 11, elbow: 13, wrist: 15, index: 19, hip: 23, knee: 25, ankle: 27, heel: 29, foot: 31 }
+};
+
+const DEFAULT_CFG = {
+  side: "right", model: isMobile ? "full" : "heavy", angleMode: "2d", smoothing: 0.5,
+  resolution: "1080", delegate: "GPU", hands: false, face: false, bitrate: 8
+};
+const cfg = Object.assign({}, DEFAULT_CFG, safeJSON(localStorage.getItem("hoopsense_cfg"), {}));
+function saveCfg() { localStorage.setItem("hoopsense_cfg", JSON.stringify(cfg)); }
+function safeJSON(s, fb) { try { return s ? JSON.parse(s) : fb; } catch { return fb; } }
+
+// Variables medidas por tiro (alineadas con la propuesta HoopSense)
+const METRICS = [
+  { key: "kneeMax",        label: "Flexión máx. rodilla",     unit: "°",   tol: 6,   up: "Flexionaste más las rodillas",            down: "Flexiona más las rodillas" },
+  { key: "elbowSet",       label: "Codo en el set",           unit: "°",   tol: 6,   up: "Codo más abierto en el set",              down: "Codo más cerrado en el set" },
+  { key: "elbowRelease",   label: "Codo al soltar",           unit: "°",   tol: 5,   up: "Codo más extendido al soltar",            down: "Extiende más el codo al soltar" },
+  { key: "shoulderRelease",label: "Hombro al soltar",         unit: "°",   tol: 6,   up: "Brazo más alto al soltar",                down: "Eleva más el brazo al soltar" },
+  { key: "forearmRelease", label: "Antebrazo vs vertical",    unit: "°",   tol: 6,   up: "Antebrazo más inclinado al soltar",       down: "Antebrazo más vertical al soltar" },
+  { key: "elbowVelPeak",   label: "Vel. pico ext. codo",      unit: "°/s", tol: 60,  up: "Extensión de codo más rápida",            down: "Extensión de codo más lenta" },
+  { key: "kneeVelPeak",    label: "Vel. pico ext. rodilla",   unit: "°/s", tol: 50,  up: "Empuje de piernas más explosivo",         down: "Empuje de piernas más lento" },
+  { key: "duration",       label: "Duración del tiro",        unit: "ms",  tol: 80,  up: "Tiro más lento que tu referencia",        down: "Tiro más rápido que tu referencia" },
+  { key: "legArmDelay",    label: "Retardo piernas→codo",     unit: "ms",  tol: 40,  up: "El brazo llega tarde respecto a las piernas", down: "El brazo se adelanta a las piernas" },
+  { key: "followThrough",  label: "Follow-through",           unit: "ms",  tol: 150, up: "Follow-through más largo",                down: "Mantén más el follow-through" }
+];
+
+/* =====================================================================
+   ESTADO
+   ===================================================================== */
+const video = $("video"), canvas = $("canvas"), ctx = canvas.getContext("2d");
+const S = {
+  mode: null, running: false, stream: null, facing: isMobile ? "environment" : "user", mirrored: false,
+  vision: null, pose: null, poseVariant: null, hand: null, face: null, delegate: cfg.delegate, loading: null,
+  lastDetectTs: 0, clock: 0, lastRaw: null, lastPerf: 0, lastSeenT: -1,
+  frames: [], fpsTimes: [], fps: 0, rvfc: null, raf: null, lastVideoTime: -1, lastUi: 0,
+  shot: { state: "idle", peakElbow: 0, peakT: 0, releaseT: 0, lastEnd: -10 }, releaseMarks: [],
+  shots: safeJSON(localStorage.getItem("hoopsense_shots"), []), selectedId: null,
+  peer: null, call: null, conn: null, roomCode: null, remoteInfo: null, wakeLock: null, toastTimer: null
+};
+
+/* =====================================================================
+   FILTRO ONE-EURO (reduce el temblor sin añadir retraso en movimientos rápidos)
+   ===================================================================== */
+class OneEuro {
+  constructor() { this.minCutoff = 1; this.beta = 1; this.dCutoff = 1; this.x = null; this.dx = 0; this.t = null; }
+  static alpha(cutoff, dt) { const tau = 1 / (2 * Math.PI * cutoff); return 1 / (1 + tau / dt); }
+  filter(x, t) {
+    if (this.t === null || !Number.isFinite(this.x)) { this.t = t; this.x = x; this.dx = 0; return x; }
+    const dt = Math.max(1e-3, t - this.t); this.t = t;
+    const rawDx = (x - this.x) / dt;
+    this.dx += OneEuro.alpha(this.dCutoff, dt) * (rawDx - this.dx);
+    const cutoff = this.minCutoff + this.beta * Math.abs(this.dx);
+    this.x += OneEuro.alpha(cutoff, dt) * (x - this.x);
+    return this.x;
+  }
+}
+class LandmarkFilter {
+  constructor(beta) { this.beta = beta; this.f = []; }
+  reset() { this.f = []; }
+  apply(points, t) {
+    const s = cfg.smoothing;
+    if (s <= 0.001) return points.map(p => ({ x: p.x, y: p.y, z: p.z, visibility: p.visibility }));
+    const minCutoff = 0.4 + (1 - s) * 5;   // Hz
+    return points.map((p, i) => {
+      let f = this.f[i];
+      if (!f) f = this.f[i] = [new OneEuro(), new OneEuro(), new OneEuro()];
+      for (const o of f) { o.minCutoff = minCutoff; o.beta = this.beta; }
+      return { x: f[0].filter(p.x, t), y: f[1].filter(p.y, t), z: f[2].filter(p.z, t), visibility: p.visibility };
+    });
+  }
+}
+const imgFilter = new LandmarkFilter(3);     // coordenadas normalizadas de imagen
+const worldFilter = new LandmarkFilter(1.5); // coordenadas 3D en metros
+
+/* =====================================================================
+   MODELOS DE IA
+   ===================================================================== */
+async function getVision() {
+  if (!S.vision) S.vision = await FilesetResolver.forVisionTasks(WASM_PATH);
+  return S.vision;
+}
+async function createTask(Cls, options) {
+  const vision = await getVision();
+  const order = S.delegate === "GPU" ? ["GPU", "CPU"] : ["CPU"];
+  let lastErr;
+  for (const delegate of order) {
+    try {
+      const task = await Cls.createFromOptions(vision, { ...options, baseOptions: { ...options.baseOptions, delegate } });
+      S.delegate = delegate;
+      return task;
+    } catch (e) { lastErr = e; console.warn(`No se pudo crear con ${delegate}`, e); }
+  }
+  throw lastErr;
+}
+function closeModels() {
+  for (const k of ["pose", "hand", "face"]) { const m = S[k]; S[k] = null; try { m?.close(); } catch {} }
+  S.poseVariant = null;
+}
+async function ensureModels() {
+  while (S.loading) { try { await S.loading; } catch {} }
+  const needPose = !S.pose || S.poseVariant !== cfg.model;
+  const needHand = cfg.hands && !S.hand;
+  const needFace = cfg.face && !S.face;
+  if (!needPose && !needHand && !needFace) return;
+  S.loading = (async () => {
+    if (needPose) {
+      setStatus(`Cargando modelo de pose ${cfg.model.toUpperCase()}...`, "warn");
+      const old = S.pose; S.pose = null; try { old?.close(); } catch {}
+      S.pose = await createTask(PoseLandmarker, {
+        baseOptions: { modelAssetPath: MODEL_URLS.pose[cfg.model] },
+        runningMode: "VIDEO", numPoses: 1,
+        minPoseDetectionConfidence: 0.6, minPosePresenceConfidence: 0.6, minTrackingConfidence: 0.6,
+        outputSegmentationMasks: false
+      });
+      S.poseVariant = cfg.model;
+      resetTracking();
+    }
+    if (needHand) {
+      setStatus("Cargando modelo de manos...", "warn");
+      S.hand = await createTask(HandLandmarker, {
+        baseOptions: { modelAssetPath: MODEL_URLS.hand }, runningMode: "VIDEO", numHands: 2,
+        minHandDetectionConfidence: 0.6, minHandPresenceConfidence: 0.6, minTrackingConfidence: 0.6
+      });
+    }
+    if (needFace) {
+      setStatus("Cargando modelo de cara...", "warn");
+      S.face = await createTask(FaceLandmarker, {
+        baseOptions: { modelAssetPath: MODEL_URLS.face }, runningMode: "VIDEO", numFaces: 1,
+        outputFaceBlendshapes: false
+      });
+    }
+  })();
+  try {
+    await S.loading;
+    if (S.mode === "monitor" && !S.stream) setStatus(`Modelos listos · esperando celular (código ${S.roomCode || "…"})`, "warn");
+    else setStatus(S.running ? "Analizando" : "Modelos listos");
+  }
+  catch (e) { console.error(e); setStatus("Error cargando modelos: " + (e.message || e), "err"); throw e; }
+  finally { S.loading = null; }
+}
+function handleRuntimeError(e) {
+  console.error(e);
+  if (S.delegate === "GPU") {
+    S.delegate = "CPU"; closeModels();
+    setStatus("La GPU falló, cambiando a CPU...", "warn");
+    ensureModels().catch(() => {});
+  } else {
+    setStatus("Error en el tracking: " + (e.message || e), "err");
+  }
+}
+
+/* =====================================================================
+   CÁMARA
+   ===================================================================== */
+function videoConstraints(facing) {
+  const h = cfg.resolution === "720" ? 720 : 1080, w = h === 720 ? 1280 : 1920;
+  return { audio: false, video: { facingMode: { ideal: facing }, width: { ideal: w }, height: { ideal: h }, frameRate: { ideal: 60, max: 60 } } };
+}
+function openCamera(facing) { return navigator.mediaDevices.getUserMedia(videoConstraints(facing)); }
+function stopStream() { S.stream?.getTracks().forEach(t => t.stop()); S.stream = null; }
+function trackSettings(stream = S.stream) { return stream?.getVideoTracks()[0]?.getSettings?.() || {}; }
+function actualFacing(stream) { return trackSettings(stream).facingMode || S.facing; }
+function waitMeta() {
+  return new Promise(res => {
+    if (video.readyState >= 1 && video.videoWidth) return res();
+    video.addEventListener("loadedmetadata", () => res(), { once: true });
+  });
+}
+async function showStream(stream, mirrored) {
+  if (video.srcObject !== stream) video.srcObject = stream;
+  await waitMeta();
+  await video.play().catch(() => {});
+  setMirror(mirrored);
+  resizeCanvas();
+}
+function setMirror(m) { S.mirrored = !!m; video.classList.toggle("mirror", S.mirrored); }
+function resizeCanvas() {
+  if (video.videoWidth && (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight)) {
+    canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+  }
+}
+async function keepAwake() {
+  try { if ("wakeLock" in navigator && !S.wakeLock) { S.wakeLock = await navigator.wakeLock.request("screen"); S.wakeLock.addEventListener("release", () => S.wakeLock = null); } } catch {}
+}
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && S.mode) keepAwake(); });
+
+/* =====================================================================
+   BUCLE DE PROCESAMIENTO
+   ===================================================================== */
+function startLoop() {
+  if (S.running) return;
+  S.running = true; resetTracking(); schedule(); updateRunButton();
+}
+function stopLoop() {
+  S.running = false;
+  if (S.rvfc != null && video.cancelVideoFrameCallback) video.cancelVideoFrameCallback(S.rvfc);
+  if (S.raf != null) cancelAnimationFrame(S.raf);
+  S.rvfc = S.raf = null;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  updateRunButton();
+}
+function schedule() {
+  if (!S.running) return;
+  if ("requestVideoFrameCallback" in HTMLVideoElement.prototype) S.rvfc = video.requestVideoFrameCallback(onFrame);
+  else S.raf = requestAnimationFrame(now => onFrame(now, null));
+}
+function onFrame(now, meta) {
+  if (!S.running) return;
+  // requestVideoFrameCallback se dispara una vez por cada fotograma real de la cámara
+  if (meta || video.currentTime !== S.lastVideoTime) {
+    S.lastVideoTime = video.currentTime;
+    try { processFrame(meta); } catch (e) { console.error(e); }
+  }
+  schedule();
+}
+function resetTracking() {
+  S.frames = []; imgFilter.reset(); worldFilter.reset(); S.lastRaw = null;
+  S.shot = { state: "idle", peakElbow: 0, peakT: 0, releaseT: 0, lastEnd: -10 };
+  S.releaseMarks = []; setBadge("Esperando tiro");
+}
+// Reloj monotónico en segundos. Usa la marca temporal real del fotograma (captura / RTP)
+// para que las velocidades angulares no dependan de la latencia de procesamiento.
+function frameTime(meta) {
+  const perf = performance.now() / 1000;
+  let raw = null;
+  if (meta) {
+    if (S.mode === "monitor" && Number.isFinite(meta.rtpTimestamp)) raw = meta.rtpTimestamp / 90000;
+    else if (Number.isFinite(meta.captureTime) && meta.captureTime > 0) raw = meta.captureTime / 1000;
+    else if (Number.isFinite(meta.mediaTime)) raw = meta.mediaTime;
+  }
+  if (raw === null) raw = perf;
+  if (S.lastRaw === null) S.clock += 1 / 30;
+  else {
+    let dt = raw - S.lastRaw;
+    if (!(dt > 0 && dt < 0.5)) { const dp = perf - S.lastPerf; dt = dp > 0 && dp < 0.5 ? dp : 1 / 30; }
+    S.clock += dt;
+  }
+  S.lastRaw = raw; S.lastPerf = perf;
+  return S.clock;
+}
+function tickFps() {
+  const now = performance.now();
+  S.fpsTimes.push(now);
+  while (S.fpsTimes.length && now - S.fpsTimes[0] > 1000) S.fpsTimes.shift();
+  S.fps = S.fpsTimes.length;
+}
+
+function processFrame(meta) {
+  if (video.readyState < 2 || !video.videoWidth) return;
+  resizeCanvas();
+  const t = frameTime(meta);
+  tickFps();
+  if (!S.pose) { ctx.clearRect(0, 0, canvas.width, canvas.height); return; }
+
+  let ts = Math.round(performance.now());
+  if (ts <= S.lastDetectTs) ts = S.lastDetectTs + 1;
+  S.lastDetectTs = ts;
+
+  let pose, hands = null, face = null;
+  try {
+    pose = S.pose.detectForVideo(video, ts);
+    if (cfg.hands && S.hand) hands = S.hand.detectForVideo(video, ts);
+    if (cfg.face && S.face) face = S.face.detectForVideo(video, ts);
+  } catch (e) { handleRuntimeError(e); return; }
+
+  const lm = pose.landmarks?.[0], wl = pose.worldLandmarks?.[0];
+  let sm = null, smw = null;
+  if (lm) {
+    if (t - S.lastSeenT > 0.4) { imgFilter.reset(); worldFilter.reset(); }
+    S.lastSeenT = t;
+    sm = imgFilter.apply(lm, t);
+    smw = wl ? worldFilter.apply(wl, t) : null;
+  }
+  const m = sm ? computeMetrics(sm, smw, hands, t) : null;
+  if (m) { pushFrame(m); updateShot(m); }
+  draw(sm, hands, face, m);
+  updateLiveUI(m, {
+    pose: lm?.length || 0, hands: hands?.landmarks?.length || 0, face: face?.faceLandmarks?.[0]?.length || 0
+  });
+}
+
+/* =====================================================================
+   BIOMECÁNICA
+   ===================================================================== */
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const DEG = 180 / Math.PI;
+function angle2px(a, b, c, W, H) {   // ángulo en b, en píxeles reales (corrige la relación de aspecto)
+  const ax = (a.x - b.x) * W, ay = (a.y - b.y) * H, cx = (c.x - b.x) * W, cy = (c.y - b.y) * H;
+  const d = Math.hypot(ax, ay) * Math.hypot(cx, cy);
+  return d ? Math.acos(clamp((ax * cx + ay * cy) / d, -1, 1)) * DEG : null;
+}
+function angle3(a, b, c) {
+  const v1 = [a.x - b.x, a.y - b.y, a.z - b.z], v2 = [c.x - b.x, c.y - b.y, c.z - b.z];
+  const d = Math.hypot(...v1) * Math.hypot(...v2);
+  return d ? Math.acos(clamp((v1[0] * v2[0] + v1[1] * v2[1] + v1[2] * v2[2]) / d, -1, 1)) * DEG : null;
+}
+function pickHand(hands, wrist) {
+  if (!hands?.landmarks?.length || !wrist) return null;
+  let best = null, bd = 0.12;
+  for (const h of hands.landmarks) { const d = Math.hypot(h[0].x - wrist.x, h[0].y - wrist.y); if (d < bd) { bd = d; best = h; } }
+  return best;
+}
+function computeMetrics(sm, smw, hands, t) {
+  const I = SIDES[cfg.side], W = canvas.width, H = canvas.height;
+  const ok = (...ids) => ids.every(i => sm[i] && (sm[i].visibility ?? 1) > VIS_MIN);
+  const use3d = cfg.angleMode === "3d" && smw;
+  const ang = (a, b, c) => !ok(a, b, c) ? null : use3d ? angle3(smw[a], smw[b], smw[c]) : angle2px(sm[a], sm[b], sm[c], W, H);
+
+  const elbow = ang(I.shoulder, I.elbow, I.wrist);
+  const kneeIn = ang(I.hip, I.knee, I.ankle);
+  const shoulder = ang(I.hip, I.shoulder, I.elbow);
+  const hip = ang(I.shoulder, I.hip, I.knee);
+  let wristIn = null;
+  const hand = pickHand(hands, sm[I.wrist]);
+  if (hand && ok(I.elbow)) wristIn = angle2px(sm[I.elbow], hand[0], hand[9], W, H);
+  else wristIn = ang(I.elbow, I.wrist, I.index);
+  let forearm = null;
+  if (ok(I.elbow, I.wrist)) {
+    const dx = (sm[I.wrist].x - sm[I.elbow].x) * W, dy = (sm[I.wrist].y - sm[I.elbow].y) * H;
+    const len = Math.hypot(dx, dy); if (len) forearm = Math.acos(clamp(-dy / len, -1, 1)) * DEG;
+  }
+  return {
+    t, elbow, knee: kneeIn == null ? null : 180 - kneeIn, shoulder, hip, forearm,
+    wrist: wristIn == null ? null : 180 - wristIn, hand,
+    wristY: ok(I.wrist) ? sm[I.wrist].y : null,
+    shoulderY: ok(I.shoulder) ? sm[I.shoulder].y : null,
+    noseY: ok(0) ? sm[0].y : null,
+    armVisible: ok(I.shoulder, I.elbow, I.wrist), legVisible: ok(I.hip, I.knee, I.ankle)
+  };
+}
+// Velocidad angular = pendiente por mínimos cuadrados de los últimos ~100 ms
+function slopeOf(key, cur) {
+  if (cur[key] == null) return null;
+  const pts = [[cur.t, cur[key]]];
+  for (let i = S.frames.length - 1; i >= 0; i--) {
+    const f = S.frames[i]; if (cur.t - f.t > 0.1) break;
+    if (f[key] != null) pts.push([f.t, f[key]]);
+  }
+  if (pts.length < 2) return null;
+  const n = pts.length; let mt = 0, mv = 0;
+  for (const [t, v] of pts) { mt += t; mv += v; } mt /= n; mv /= n;
+  let num = 0, den = 0;
+  for (const [t, v] of pts) { num += (t - mt) * (v - mv); den += (t - mt) ** 2; }
+  return den > 0 ? num / den : null;
+}
+function pushFrame(m) {
+  m.elbowVel = slopeOf("elbow", m);
+  m.kneeVel = slopeOf("knee", m);
+  delete m.hand;
+  S.frames.push(m);
+  while (S.frames.length && m.t - S.frames[0].t > 8) S.frames.shift();
+}
+
+/* ---------- Detección automática del tiro ---------- */
+function updateShot(f) {
+  const sh = S.shot;
+  if (!f.armVisible) { if (sh.state === "idle") setBadge("⚠ Brazo de tiro poco visible", "warn"); return; }
+  const above = f.wristY != null && f.shoulderY != null && f.wristY < f.shoulderY;
+  switch (sh.state) {
+    case "idle":
+      if (S.lastBadgeWarn) setBadge("Listo para el tiro");
+      if (above && f.t - sh.lastEnd > 1.0) {
+        sh.state = "rising"; sh.peakElbow = f.elbow ?? 0; sh.peakT = f.t;
+        setBadge("⬆ Tiro en curso", "active");
+      }
+      break;
+    case "rising":
+      if (f.elbow != null && f.elbow > sh.peakElbow + 0.5) { sh.peakElbow = f.elbow; sh.peakT = f.t; }
+      if (!above || (f.elbow != null && sh.peakElbow - f.elbow > 12) || f.t - sh.peakT > 0.35) {
+        const overHead = f.noseY == null || f.wristY < f.noseY;
+        if (sh.peakElbow >= 135 && (above ? overHead : true)) {
+          sh.state = "follow"; sh.releaseT = sh.peakT; S.releaseMarks.push(sh.releaseT);
+          setBadge("✋ Follow-through", "active");
+          if (!above) { finalizeShot(sh.releaseT, f.t); sh.state = "idle"; sh.lastEnd = f.t; setBadge("Listo para el tiro"); }
+        } else { sh.state = "idle"; sh.lastEnd = f.t; setBadge("Listo para el tiro"); }
+      }
+      break;
+    case "follow":
+      if (!above || f.t - sh.releaseT > 2.0) {
+        finalizeShot(sh.releaseT, f.t);
+        sh.state = "idle"; sh.lastEnd = f.t; setBadge("Listo para el tiro");
+      }
+      break;
+  }
+}
+function nearest(arr, t) { let b = null; for (const f of arr) if (!b || Math.abs(f.t - t) < Math.abs(b.t - t)) b = f; return b; }
+function extreme(arr, key, sign = 1) { let b = null; for (const f of arr) if (f[key] != null && (!b || sign * f[key] > sign * b[key])) b = f; return b; }
+function finalizeShot(releaseT, endT) {
+  const win = S.frames.filter(f => f.t >= releaseT - 2.5 && f.t <= endT);
+  if (win.length < 8) return;
+  const pre = win.filter(f => f.t <= releaseT && f.t >= releaseT - 2.0);
+  const dip = extreme(pre, "knee", 1);   // máxima flexión de rodilla antes de soltar
+  let startT = releaseT - 1.2;
+  if (dip) {
+    const before = win.filter(f => f.t <= dip.t && f.knee != null);
+    const base = Math.min(...before.map(f => f.knee));
+    if (dip.knee - base > 5) {
+      for (let i = before.length - 1; i >= 0; i--) {
+        if (before[i].knee <= base + 0.15 * (dip.knee - base) + 2) { startT = before[i].t; break; }
+      }
+    }
+  }
+  startT = Math.min(startT, releaseT - 0.1);
+  const seg = win.filter(f => f.t >= startT && f.t <= releaseT + 0.1);
+  const atRel = nearest(win, releaseT);
+  const setF = extreme(seg.filter(f => f.t <= releaseT), "elbow", -1);
+  const ev = extreme(seg, "elbowVel", 1);
+  const kv = extreme(win.filter(f => f.t >= (dip?.t ?? startT) && f.t <= releaseT + 0.1), "kneeVel", -1);
+  const wf = extreme(win.filter(f => f.t >= releaseT), "wrist", 1);
+  const metrics = {
+    kneeMax: dip?.knee ?? null,
+    elbowSet: setF?.elbow ?? null,
+    elbowRelease: atRel?.elbow ?? null,
+    shoulderRelease: atRel?.shoulder ?? null,
+    forearmRelease: atRel?.forearm ?? null,
+    elbowVelPeak: ev?.elbowVel ?? null,
+    kneeVelPeak: kv && kv.kneeVel < 0 ? -kv.kneeVel : null,
+    duration: (releaseT - startT) * 1000,
+    legArmDelay: ev && kv ? (ev.t - kv.t) * 1000 : null,
+    followThrough: (endT - releaseT) * 1000,
+    wristFollow: wf?.wrist ?? null
+  };
+  for (const k in metrics) if (Number.isFinite(metrics[k])) metrics[k] = +metrics[k].toFixed(1); else metrics[k] = null;
+  const step = Math.max(1, Math.ceil(win.length / 200));
+  const r = v => v == null ? null : +v.toFixed(2);
+  const series = win.filter((_, i) => i % step === 0).map(f => ({
+    t: +(f.t - releaseT).toFixed(3), elbow: r(f.elbow), knee: r(f.knee), shoulder: r(f.shoulder), hip: r(f.hip),
+    forearm: r(f.forearm), wrist: r(f.wrist), elbowVel: r(f.elbowVel), kneeVel: r(f.kneeVel)
+  }));
+  const shot = {
+    id: Date.now(), date: new Date().toISOString(), label: null, side: cfg.side, model: cfg.model,
+    angleMode: cfg.angleMode, fps: S.fps, resolution: `${video.videoWidth}x${video.videoHeight}`, metrics, series
+  };
+  S.shots.unshift(shot); S.selectedId = shot.id; saveShots();
+  renderShots();
+  announceShot(shot);
+}
+
+/* ---------- Referencia personal y comparación ---------- */
+function reference(excludeId) {
+  const makes = S.shots.filter(s => s.label === "make" && s.id !== excludeId);
+  if (makes.length < 3) return { n: makes.length, ready: false };
+  const ref = { n: makes.length, ready: true };
+  for (const M of METRICS) {
+    const v = makes.map(s => s.metrics[M.key]).filter(Number.isFinite);
+    if (v.length < 2) continue;
+    const mean = v.reduce((a, b) => a + b, 0) / v.length;
+    const sd = Math.sqrt(v.reduce((a, b) => a + (b - mean) ** 2, 0) / (v.length - 1));
+    ref[M.key] = { mean, sd };
+  }
+  return ref;
+}
+function compare(shot, ref) {
+  const items = [], zs = [];
+  for (const M of METRICS) {
+    const v = shot.metrics[M.key], r = ref?.[M.key];
+    if (!Number.isFinite(v) || !r) { items.push({ M, v, diff: null }); continue; }
+    const diff = v - r.mean, sdEff = Math.max(r.sd, M.tol / 2), z = diff / sdEff;
+    zs.push(Math.min(Math.abs(z), 4));
+    items.push({ M, v, diff, z, flagged: Math.abs(diff) > Math.max(M.tol, 1.5 * r.sd) });
+  }
+  const score = zs.length ? Math.round(clamp(100 - 15 * zs.reduce((a, b) => a + b, 0) / zs.length, 0, 100)) : null;
+  const messages = items.filter(i => i.flagged).sort((a, b) => Math.abs(b.z) - Math.abs(a.z))
+    .map(i => `${i.diff > 0 ? i.M.up : i.M.down} (${i.diff > 0 ? "+" : "−"}${fmtNum(Math.abs(i.diff), i.M.unit)} ${i.M.unit})`);
+  return { items, score, messages };
+}
+function fmtNum(v, unit) { return Number.isFinite(v) ? (unit === "°/s" || unit === "ms" ? Math.round(v) : v.toFixed(1)) : "–"; }
+
+/* =====================================================================
+   DIBUJO SOBRE EL VIDEO
+   ===================================================================== */
+function draw(sm, hands, face, m) {
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+  const u = Math.max(1.2, W / 640);
+  const X = p => (S.mirrored ? 1 - p.x : p.x) * W, Y = p => p.y * H;
+  const line = (a, b, color, w) => {
+    if (!a || !b || (a.visibility ?? 1) < VIS_MIN || (b.visibility ?? 1) < VIS_MIN) return;
+    ctx.beginPath(); ctx.moveTo(X(a), Y(a)); ctx.lineTo(X(b), Y(b));
+    ctx.strokeStyle = color; ctx.lineWidth = w; ctx.lineCap = "round"; ctx.stroke();
+  };
+  const dot = (p, color, r) => {
+    if (!p || (p.visibility ?? 1) < VIS_MIN) return;
+    ctx.beginPath(); ctx.arc(X(p), Y(p), r, 0, Math.PI * 2); ctx.fillStyle = color; ctx.fill();
+  };
+
+  if (face?.faceLandmarks?.[0]) {
+    ctx.fillStyle = YELLOW;
+    for (const p of face.faceLandmarks[0]) { ctx.fillRect(X(p) - u * 0.6, Y(p) - u * 0.6, u * 1.2, u * 1.2); }
+  }
+  if (sm) {
+    for (const { start, end } of PoseLandmarker.POSE_CONNECTIONS) {
+      if (start <= 10 && end <= 10) continue;
+      line(sm[start], sm[end], "rgba(255,255,255,.55)", 2 * u);
+    }
+    const I = SIDES[cfg.side];
+    [[I.shoulder, I.elbow], [I.elbow, I.wrist], [I.wrist, I.index], [I.shoulder, I.hip],
+     [I.hip, I.knee], [I.knee, I.ankle], [I.ankle, I.heel], [I.heel, I.foot], [I.ankle, I.foot]]
+      .forEach(([a, b]) => line(sm[a], sm[b], ORANGE, 4.5 * u));
+    sm.forEach((p, i) => { if (i > 10 || i === 0) dot(p, "#fff", 2.5 * u); });
+    [I.shoulder, I.elbow, I.wrist, I.hip, I.knee, I.ankle].forEach(i => dot(sm[i], ORANGE, 5.5 * u));
+    if (m) {
+      angleLabel(sm[I.shoulder], sm[I.elbow], sm[I.wrist], m.elbow, ORANGE, u, X, Y);
+      angleLabel(sm[I.hip], sm[I.knee], sm[I.ankle], m.knee, GREEN, u, X, Y, "flex ");
+      angleLabel(sm[I.hip], sm[I.shoulder], sm[I.elbow], m.shoulder, BLUE, u, X, Y);
+    }
+  }
+  if (hands?.landmarks) {
+    const chains = [[0, 1, 2, 3, 4], [0, 5, 6, 7, 8], [5, 9, 10, 11, 12], [9, 13, 14, 15, 16], [13, 17, 18, 19, 20], [0, 17]];
+    for (const h of hands.landmarks) {
+      for (const c of chains) for (let i = 0; i < c.length - 1; i++) line(h[c[i]], h[c[i + 1]], BLUE, 2.5 * u);
+      h.forEach(p => dot(p, BLUE, 2.5 * u));
+    }
+  }
+}
+function angleLabel(a, b, c, value, color, u, X, Y, prefix = "") {
+  if (value == null || !a || !b || !c) return;
+  const bx = X(b), by = Y(b);
+  const a1 = Math.atan2(Y(a) - by, X(a) - bx), a2 = Math.atan2(Y(c) - by, X(c) - bx);
+  let diff = a2 - a1; while (diff > Math.PI) diff -= 2 * Math.PI; while (diff < -Math.PI) diff += 2 * Math.PI;
+  const r = 22 * u;
+  ctx.beginPath(); ctx.arc(bx, by, r, a1, a1 + diff, diff < 0);
+  ctx.strokeStyle = color; ctx.lineWidth = 2.5 * u; ctx.stroke();
+  // texto en el lado opuesto a la bisectriz
+  let ox = -(Math.cos(a1) + Math.cos(a2)), oy = -(Math.sin(a1) + Math.sin(a2));
+  const len = Math.hypot(ox, oy); if (len < 0.2) { ox = 1; oy = -1; } else { ox /= len; oy /= len; }
+  const tx = bx + ox * r * 2.2, ty = by + oy * r * 2.2;
+  const text = `${prefix}${Math.round(value)}°`;
+  ctx.font = `700 ${Math.round(15 * u)}px -apple-system, Segoe UI, sans-serif`;
+  const tw = ctx.measureText(text).width, ph = 20 * u;
+  ctx.fillStyle = "rgba(0,0,0,.75)";
+  roundRect(tx - tw / 2 - 6 * u, ty - ph / 2, tw + 12 * u, ph, 6 * u); ctx.fill();
+  ctx.fillStyle = color; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillText(text, tx, ty + u);
+}
+function roundRect(x, y, w, h, r) {
+  ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+}
+
+/* =====================================================================
+   INTERFAZ
+   ===================================================================== */
+function setStatus(text, cls = "") { $("status").textContent = text; $("status").className = cls; }
+function setBadge(text, cls = "") {
+  const b = $("shotBadge"); if (b.textContent !== text) b.textContent = text;
+  b.className = cls; S.lastBadgeWarn = cls === "warn";
+}
+const deg = v => Number.isFinite(v) ? Math.round(v) + "°" : "–";
+const vel = v => Number.isFinite(v) ? Math.round(v) + "" : "–";
+function updateLiveUI(m, info) {
+  const now = performance.now(); if (now - S.lastUi < 100) return; S.lastUi = now;
+  $("hElbow").textContent = deg(m?.elbow); $("hKnee").textContent = deg(m?.knee);
+  $("hShoulder").textContent = deg(m?.shoulder); $("hElbowVel").textContent = vel(m?.elbowVel);
+  if (!$("app").classList.contains("panel-open")) return;
+  $("mElbow").textContent = deg(m?.elbow); $("mKnee").textContent = deg(m?.knee);
+  $("mShoulder").textContent = deg(m?.shoulder); $("mHip").textContent = deg(m?.hip);
+  $("mForearm").textContent = deg(m?.forearm); $("mWrist").textContent = deg(m?.wrist);
+  $("mElbowVel").textContent = Number.isFinite(m?.elbowVel) ? Math.round(m.elbowVel) + " °/s" : "–";
+  $("mKneeVel").textContent = Number.isFinite(m?.kneeVel) ? Math.round(m.kneeVel) + " °/s" : "–";
+  const ts = S.remoteInfo && S.mode === "monitor" ? ` · cámara celular ${S.remoteInfo.width}×${S.remoteInfo.height}@${Math.round(S.remoteInfo.frameRate || 0)}` : "";
+  $("detInfo").textContent = `Pose ${info.pose} pts · Manos ${info.hands} · Cara ${info.face} pts · ${S.fps} FPS · ` +
+    `${video.videoWidth}×${video.videoHeight} · ${cfg.model.toUpperCase()} · ${S.delegate}${ts}`;
+  drawSpark();
+}
+function drawSpark() {
+  const c = $("spark"); if (!c.offsetParent) return;
+  const dpr = devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight;
+  if (c.width !== Math.round(w * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); }
+  const g = c.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
+  g.strokeStyle = "#ffffff14"; g.lineWidth = 1;
+  for (const v of [45, 90, 135]) { const y = h - v / 180 * h; g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke(); }
+  const F = S.frames; if (!F.length) return;
+  const t1 = F[F.length - 1].t, t0 = t1 - 4;
+  g.setLineDash([4, 4]); g.strokeStyle = "#ffffff66";
+  for (const rt of S.releaseMarks) if (rt >= t0) { const x = (rt - t0) / 4 * w; g.beginPath(); g.moveTo(x, 0); g.lineTo(x, h); g.stroke(); }
+  g.setLineDash([]);
+  const plot = (key, color) => {
+    g.beginPath(); let started = false;
+    for (const f of F) {
+      if (f.t < t0) continue; const v = f[key];
+      if (v == null) { started = false; continue; }
+      const x = (f.t - t0) / 4 * w, y = h - clamp(v, 0, 180) / 180 * h;
+      if (!started) { g.moveTo(x, y); started = true; } else g.lineTo(x, y);
+    }
+    g.strokeStyle = color; g.lineWidth = 2; g.stroke();
+  };
+  plot("shoulder", BLUE); plot("knee", GREEN); plot("elbow", ORANGE);
+}
+
+/* ---------- Tiros: render, etiquetas, historial ---------- */
+function saveShots() {
+  if (S.shots.length > 150) S.shots.length = 150;
+  try { localStorage.setItem("hoopsense_shots", JSON.stringify(S.shots)); }
+  catch { S.shots.forEach((s, i) => { if (i > 30) delete s.series; }); localStorage.setItem("hoopsense_shots", JSON.stringify(S.shots)); }
+}
+function shotNumber(shot) { return S.shots.length - S.shots.indexOf(shot); }
+function shotSummary(shot) {
+  const ref = reference(shot.id);
+  if (!ref.ready) return { ref, cmp: null, text: `Etiqueta tus tiros: ${ref.n}/3 encestados para crear tu referencia.` };
+  const cmp = compare(shot, ref);
+  const text = cmp.messages.length ? cmp.messages.slice(0, 2).join(" · ") : "✅ Tiro consistente con tu referencia";
+  return { ref, cmp, text };
+}
+function announceShot(shot) {
+  const { cmp, text } = shotSummary(shot);
+  const m = shot.metrics;
+  const head = cmp?.score != null ? `<div class="score">Consistencia ${cmp.score}/100</div>` : `<div class="score">Tiro #${shotNumber(shot)}</div>`;
+  const quick = `Codo al soltar ${deg(m.elbowRelease)} · Rodilla ${deg(m.kneeMax)} · ${fmtNum(m.duration, "ms")} ms`;
+  const t = $("toast");
+  t.innerHTML = `${head}<div>${text}</div><div style="font-size:.75em;color:#bbb;margin-top:4px">${quick}</div>
+    <div class="btns"><button data-toast-label="make">✓ Encestado <kbd>E</kbd></button><button data-toast-label="miss">✗ Fallado <kbd>F</kbd></button></div>`;
+  t.hidden = false;
+  clearTimeout(S.toastTimer); S.toastTimer = setTimeout(() => t.hidden = true, 9000);
+  sendToCamera({ type: "feedback", score: cmp?.score ?? null, text, quick });
+}
+$("toast").addEventListener("click", e => {
+  const b = e.target.closest("[data-toast-label]"); if (!b || !S.shots[0]) return;
+  labelShot(S.shots[0].id, b.dataset.toastLabel); $("toast").hidden = true;
+});
+function labelShot(id, label) {
+  const s = S.shots.find(x => x.id === id); if (!s) return;
+  s.label = s.label === label ? null : label; saveShots(); renderShots();
+}
+function renderShots() { renderLastShot(); renderRef(); renderHistory(); }
+function renderLastShot() {
+  const shot = S.shots.find(s => s.id === S.selectedId) || S.shots[0];
+  const box = $("lastShot");
+  if (!shot) { box.className = "tiny"; return; }
+  box.className = "";
+  const { cmp, text } = shotSummary(shot);
+  const rows = METRICS.map(M => {
+    const v = shot.metrics[M.key], it = cmp?.items.find(i => i.M.key === M.key);
+    const d = it?.diff;
+    const dTxt = d == null ? "" : `<span class="${it.flagged ? "warn" : "pos"}">${d > 0 ? "+" : "−"}${fmtNum(Math.abs(d), M.unit)}</span>`;
+    return `<tr><td>${M.label}</td><td>${fmtNum(v, M.unit)} ${M.unit}</td><td>${dTxt}</td></tr>`;
+  }).join("");
+  box.innerHTML = `
+    <div class="shot-head"><b>Tiro #${shotNumber(shot)} · ${new Date(shot.date).toLocaleTimeString()}</b>
+      <span class="score-badge" style="color:${cmp?.score >= 75 ? "var(--green)" : cmp?.score >= 50 ? "var(--yellow)" : "var(--red)"}">${cmp?.score ?? "–"}${cmp?.score != null ? "/100" : ""}</span></div>
+    <div class="label-btns">
+      <button data-label="make" class="${shot.label === "make" ? "sel-make" : ""}">✓ Encestado</button>
+      <button data-label="miss" class="${shot.label === "miss" ? "sel-miss" : ""}">✗ Fallado</button>
+    </div>
+    <table><tr><th>Variable</th><th>Valor</th><th>vs ref.</th></tr>${rows}</table>
+    ${cmp?.messages.length ? `<ul class="fb">${cmp.messages.map(x => `<li>${x}</li>`).join("")}</ul>` : `<p class="tiny" style="margin:8px 0 0">${text}</p>`}`;
+  box.dataset.id = shot.id;
+}
+$("lastShot").addEventListener("click", e => {
+  const b = e.target.closest("[data-label]"); if (!b) return;
+  labelShot(+$("lastShot").dataset.id, b.dataset.label);
+});
+function renderRef() {
+  const ref = reference();
+  const labelled = S.shots.filter(s => s.label);
+  const makes = labelled.filter(s => s.label === "make").length;
+  const pct = labelled.length ? ` · Efectividad ${Math.round(100 * makes / labelled.length)}% (${makes}/${labelled.length})` : "";
+  if (!ref.ready) { $("refBox").innerHTML = `Etiqueta al menos <b>3 tiros encestados</b> (tienes ${ref.n}).${pct}`; return; }
+  $("refBox").innerHTML = `<div style="margin-bottom:6px">Basada en ${ref.n} tiros encestados${pct}</div>
+    <table><tr><th>Variable</th><th>Media</th><th>± DE</th></tr>${METRICS.filter(M => ref[M.key]).map(M =>
+      `<tr><td>${M.label}</td><td>${fmtNum(ref[M.key].mean, M.unit)} ${M.unit}</td><td>±${fmtNum(ref[M.key].sd, M.unit)}</td></tr>`).join("")}</table>`;
+}
+function renderHistory() {
+  const box = $("history");
+  if (!S.shots.length) { box.textContent = "Sin tiros todavía."; return; }
+  box.innerHTML = S.shots.slice(0, 60).map(s => {
+    const { cmp } = shotSummary(s);
+    const icon = s.label === "make" ? '<span class="pos">✓</span>' : s.label === "miss" ? '<span class="neg">✗</span>' : '<span class="tiny">?</span>';
+    return `<div class="hist-row ${s.id === S.selectedId ? "sel" : ""}" data-id="${s.id}">
+      ${icon}<span class="grow">#${shotNumber(s)} · ${new Date(s.date).toLocaleTimeString()} · codo ${deg(s.metrics.elbowRelease)} · rod. ${deg(s.metrics.kneeMax)}</span>
+      <b>${cmp?.score ?? ""}</b>
+      <button data-act="make">✓</button><button data-act="miss">✗</button><button data-act="del">🗑</button></div>`;
+  }).join("");
+}
+$("history").addEventListener("click", e => {
+  const row = e.target.closest(".hist-row"); if (!row) return;
+  const id = +row.dataset.id, act = e.target.closest("[data-act]")?.dataset.act;
+  if (act === "del") { S.shots = S.shots.filter(s => s.id !== id); saveShots(); }
+  else if (act) { labelShot(id, act); }
+  S.selectedId = id; renderShots();
+});
+document.addEventListener("keydown", e => {
+  if (e.target.matches("input, select, textarea") || !S.shots[0] || S.mode === "camera") return;
+  const k = e.key.toLowerCase();
+  if (k === "e" || k === "f") { labelShot(S.shots[0].id, k === "e" ? "make" : "miss"); $("toast").hidden = true; }
+});
+function download(name, text, type) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([text], { type })); a.download = name;
+  document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+}
+$("exportCsv").onclick = () => {
+  const keys = METRICS.map(M => M.key).concat("wristFollow");
+  const head = ["tiro", "fecha", "resultado", "lado", "modelo", "angulos", "fps", "resolucion", ...keys].join(",");
+  const rows = [...S.shots].reverse().map((s, i) => [i + 1, s.date, s.label === "make" ? "encestado" : s.label === "miss" ? "fallado" : "", s.side, s.model, s.angleMode, s.fps, s.resolution, ...keys.map(k => s.metrics[k] ?? "")].join(","));
+  download(`hoopsense_tiros_${new Date().toISOString().slice(0, 10)}.csv`, [head, ...rows].join("\n"), "text/csv");
+};
+$("exportJson").onclick = () => download(`hoopsense_tiros_${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(S.shots, null, 1), "application/json");
+$("clearShots").onclick = () => { if (confirm("¿Borrar todos los tiros guardados?")) { S.shots = []; S.selectedId = null; saveShots(); renderShots(); $("lastShot").innerHTML = "Sin tiros."; } };
+
+/* ---------- Ajustes ---------- */
+document.querySelectorAll("[data-cfg]").forEach(el => {
+  const k = el.dataset.cfg;
+  if (el.type === "checkbox") el.checked = !!cfg[k]; else el.value = cfg[k];
+  el.addEventListener(el.type === "range" ? "input" : "change", () => {
+    cfg[k] = el.type === "checkbox" ? el.checked : el.type === "range" ? +el.value : el.value;
+    saveCfg(); onCfgChange(k);
+  });
+});
+async function onCfgChange(k) {
+  if (k === "side") { $("sideLbl").textContent = cfg.side === "right" ? "derecho" : "izquierdo"; resetTracking(); }
+  if (k === "angleMode") resetTracking();
+  if (k === "delegate") { S.delegate = cfg.delegate; closeModels(); }
+  if (["model", "hands", "face", "delegate"].includes(k) && S.mode !== "camera") ensureModels().catch(() => {});
+  if (k === "resolution") {
+    if (S.mode === "local" && S.stream) await restartLocalCamera();
+    if (S.mode === "monitor") sendToCamera({ type: "config", resolution: cfg.resolution });
+  }
+}
+$("sideLbl").textContent = cfg.side === "right" ? "derecho" : "izquierdo";
+
+/* =====================================================================
+   MODO LOCAL
+   ===================================================================== */
+async function startLocal() {
+  try {
+    $("startOverlay").hidden = true; $("btnRun").disabled = true;
+    setStatus("Solicitando cámara...", "warn");
+    stopStream();
+    S.stream = await openCamera(S.facing);
+    await showStream(S.stream, actualFacing(S.stream) === "user");
+    keepAwake();
+    await ensureModels();
+    startLoop();
+    const st = trackSettings();
+    setStatus(`Analizando · ${st.width || video.videoWidth}×${st.height || video.videoHeight}${st.frameRate ? " @" + Math.round(st.frameRate) + "fps" : ""}`);
+  } catch (e) {
+    console.error(e);
+    setStatus("No se pudo iniciar: " + (e.message || e.name), "err");
+    $("startOverlay").hidden = false;
+  } finally { $("btnRun").disabled = false; }
+}
+function stopLocal() {
+  stopLoop(); stopStream(); video.srcObject = null;
+  setStatus("Cámara detenida"); $("startOverlay").hidden = false;
+}
+async function restartLocalCamera() {
+  stopStream();
+  try {
+    S.stream = await openCamera(S.facing);
+    await showStream(S.stream, actualFacing(S.stream) === "user");
+    resetTracking();
+  } catch (e) { setStatus("Error de cámara: " + e.message, "err"); }
+}
+
+/* =====================================================================
+   MODO REMOTO (WebRTC con PeerJS)
+   ===================================================================== */
+const CODE_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+const randomCode = () => Array.from(crypto.getRandomValues(new Uint8Array(5)), b => CODE_CHARS[b % CODE_CHARS.length]).join("");
+const peerIdFor = code => `hoopsense-v2-${code.toLowerCase()}`;
+function peerAvailable() {
+  if (typeof Peer !== "undefined") return true;
+  setStatus("No se pudo cargar PeerJS (revisa la conexión a internet)", "err");
+  return false;
+}
+function sendToCamera(msg) { try { if (S.conn?.open) S.conn.send(msg); } catch {} }
+function destroyPeer() {
+  try { S.call?.close(); } catch {} try { S.conn?.close(); } catch {} try { S.peer?.destroy(); } catch {}
+  S.call = S.conn = S.peer = null;
+}
+
+/* ---------- Computadora (monitor) ---------- */
+function startMonitor() {
+  $("pairOverlay").hidden = false;
+  ensureModels().catch(() => {});   // precarga mientras se empareja
+  if (!peerAvailable()) { pairStatus("No se pudo cargar PeerJS. Revisa internet y recarga.", "err"); return; }
+  createMonitorPeer(localStorage.getItem("hoopsense_room") || randomCode());
+}
+function pairStatus(text, cls = "") { $("pairStatus").textContent = text; $("pairStatus").className = cls; }
+function createMonitorPeer(code) {
+  destroyPeer();
+  S.roomCode = code; localStorage.setItem("hoopsense_room", code);
+  $("pairCode").textContent = code;
+  pairStatus("Conectando al servidor de emparejamiento...");
+  const peer = S.peer = new Peer(peerIdFor(code), { debug: 1 });
+  peer.on("open", () => { renderPairing(); pairStatus("Esperando al celular..."); setStatus("Esperando celular · código " + code, "warn"); });
+  peer.on("error", e => {
+    console.warn("PeerJS", e.type, e);
+    if (e.type === "unavailable-id") createMonitorPeer(randomCode());
+    else if (["network", "server-error", "socket-error", "socket-closed"].includes(e.type)) pairStatus("Sin conexión con el servidor de emparejamiento. Revisa internet.", "err");
+    else pairStatus("Error: " + e.type, "err");
+  });
+  peer.on("disconnected", () => { setTimeout(() => { if (S.peer === peer && !peer.destroyed) try { peer.reconnect(); } catch {} }, 1500); });
+  peer.on("connection", conn => {
+    try { S.conn?.close(); } catch {}
+    S.conn = conn;
+    conn.on("open", () => pairStatus("Celular conectado, recibiendo video...", "ok"));
+    conn.on("data", onMonitorData);
+  });
+  peer.on("call", call => {
+    if (S.call && S.call !== call) { const old = S.call; S.call = null; try { old.close(); } catch {} }
+    S.call = call;
+    call.answer();   // solo recibimos video
+    call.on("stream", stream => onRemoteStream(stream));
+    call.on("close", () => { if (S.call === call) onRemoteGone(); });
+    watchPc(call, st => {
+      if (st === "failed") { pairStatus("No se pudo establecer la conexión directa. Usa la misma red Wi-Fi.", "err"); onRemoteGone(); }
+      else if (st === "disconnected") setStatus("Conexión inestable con el celular...", "warn");
+      else if (st === "connected" && S.running) setStatus("Analizando video del celular");
+    });
+  });
+}
+function renderPairing() {
+  const base = location.protocol.startsWith("http") ? location.origin + location.pathname : null;
+  if (!base) { $("pairUrl").textContent = "⚠ Abre esta página desde GitHub Pages (https) para usar el modo remoto."; return; }
+  const url = `${base}?mode=camera&room=${S.roomCode}`;
+  $("pairUrl").textContent = url;
+  $("qr").innerHTML = "";
+  if (typeof QRCode !== "undefined") new QRCode($("qr"), { text: url, width: 190, height: 190, correctLevel: QRCode.CorrectLevel.M });
+  else $("qr").hidden = true;
+}
+async function onRemoteStream(stream) {
+  if (video.srcObject === stream && S.running) return;
+  S.stream = stream;
+  $("pairOverlay").hidden = true;
+  setStatus("Video recibido, preparando IA...", "warn");
+  await showStream(stream, S.remoteInfo?.facing === "user");
+  keepAwake();
+  try { await ensureModels(); } catch { return; }
+  startLoop();
+  setStatus("Analizando video del celular");
+}
+function onRemoteGone() {
+  stopLoop(); video.srcObject = null; S.stream = null; S.call = null;
+  setStatus("Celular desconectado", "err");
+  pairStatus("El celular se desconectó. Esperando reconexión...", "err");
+  $("pairOverlay").hidden = false;
+}
+function onMonitorData(d) {
+  if (d?.type === "info") {
+    S.remoteInfo = d; setMirror(d.facing === "user"); resetTracking();
+  }
+}
+
+/* ---------- Celular (cámara) ---------- */
+function camStatus(text, cls = "") { $("camStatus").textContent = text; $("camStatus").className = cls; }
+async function startCameraMode(code) {
+  code = (code || "").trim().toUpperCase();
+  if (code.length < 4) { $("joinCode").focus(); return; }
+  enterApp("camera");
+  S.roomCode = code; $("camCode").textContent = code;
+  S.facing = "environment";
+  camStatus("Abriendo cámara...");
+  try {
+    S.stream = await openCamera(S.facing);
+    await showStream(S.stream, actualFacing(S.stream) === "user");
+  } catch (e) { camStatus("No se pudo abrir la cámara: " + (e.message || e.name), "err"); return; }
+  keepAwake();
+  connectToMonitor();
+}
+function connectToMonitor() {
+  if (!peerAvailable()) { camStatus("No se pudo cargar PeerJS (revisa internet).", "err"); return; }
+  destroyPeer();
+  $("reconnectWrap").hidden = true;
+  camStatus("Conectando con la computadora...");
+  const peer = S.peer = new Peer({ debug: 1 });
+  peer.on("open", () => {
+    const target = peerIdFor(S.roomCode);
+    const conn = S.conn = peer.connect(target, { reliable: true });
+    conn.on("open", sendInfo);
+    conn.on("data", onCameraCommand);
+    const call = S.call = peer.call(target, S.stream);
+    call.on("close", () => { if (S.call === call) { camStatus("Conexión cerrada", "err"); $("reconnectWrap").hidden = false; } });
+    watchPc(call, st => {
+      if (st === "connected") { camStatus("✓ Transmitiendo a la computadora", "ok"); tuneSender(); $("reconnectWrap").hidden = true; }
+      else if (st === "failed" || st === "disconnected") { camStatus(`Conexión perdida (${st})`, "err"); $("reconnectWrap").hidden = false; }
+      else camStatus(`Estableciendo conexión (${st})...`);
+    });
+  });
+  peer.on("error", e => {
+    console.warn("PeerJS", e.type, e);
+    if (e.type === "peer-unavailable") camStatus(`No se encontró la computadora con código ${S.roomCode}. ¿Está abierto el modo Monitor?`, "err");
+    else camStatus("Error de conexión: " + e.type, "err");
+    $("reconnectWrap").hidden = false;
+  });
+  peer.on("disconnected", () => { setTimeout(() => { if (S.peer === peer && !peer.destroyed) try { peer.reconnect(); } catch {} }, 1500); });
+}
+function watchPc(call, cb, tries = 0) {
+  const pc = call.peerConnection;
+  if (!pc) { if (tries < 40) setTimeout(() => watchPc(call, cb, tries + 1), 250); return; }
+  let last = null;
+  const upd = () => { const st = pc.connectionState || pc.iceConnectionState; if (st !== last) { last = st; cb(st); } };
+  pc.addEventListener("connectionstatechange", upd);
+  pc.addEventListener("iceconnectionstatechange", upd);
+  upd();
+}
+function videoSender() { return S.call?.peerConnection?.getSenders().find(s => s.track?.kind === "video" || s.track === null); }
+async function tuneSender() {   // más bitrate = menos compresión = landmarks más precisos en la PC
+  const sender = videoSender(); if (!sender?.getParameters) return;
+  try {
+    const p = sender.getParameters();
+    if (!p.encodings || !p.encodings.length) p.encodings = [{}];
+    p.encodings[0].maxBitrate = cfg.bitrate * 1e6;
+    p.encodings[0].maxFramerate = 60;
+    await sender.setParameters(p);
+  } catch (e) { console.warn("setParameters", e); }
+}
+function sendInfo() {
+  const st = trackSettings();
+  sendToCamera({ type: "info", facing: actualFacing(S.stream), width: st.width || video.videoWidth, height: st.height || video.videoHeight, frameRate: st.frameRate || null });
+}
+async function reopenPhoneCamera(facing) {
+  stopStream();   // iOS solo permite una cámara activa a la vez
+  try {
+    S.stream = await openCamera(facing); S.facing = facing;
+    const sender = videoSender();
+    if (sender) await sender.replaceTrack(S.stream.getVideoTracks()[0]);
+    await showStream(S.stream, actualFacing(S.stream) === "user");
+    tuneSender(); sendInfo();
+  } catch (e) { camStatus("Error al cambiar cámara: " + e.message, "err"); }
+}
+async function onCameraCommand(d) {
+  if (d?.type === "switch") await reopenPhoneCamera(S.facing === "user" ? "environment" : "user");
+  else if (d?.type === "config") { cfg.resolution = d.resolution; saveCfg(); await reopenPhoneCamera(S.facing); }
+  else if (d?.type === "feedback") {
+    const el = $("phoneFeedback");
+    el.innerHTML = `${d.score != null ? `<div style="font-size:1.6em;font-weight:800">${d.score}/100</div>` : ""}<div>${d.text}</div><div style="font-size:.7em;color:#bbb;margin-top:4px">${d.quick || ""}</div>`;
+    el.hidden = false; clearTimeout(S.toastTimer); S.toastTimer = setTimeout(() => el.hidden = true, 6000);
+  }
+}
+
+/* =====================================================================
+   NAVEGACIÓN ENTRE MODOS
+   ===================================================================== */
+function enterApp(mode) {
+  S.mode = mode;
+  $("home").hidden = true; $("app").hidden = false;
+  $("app").className = "mode-" + mode;
+  document.querySelectorAll("#app [data-show]").forEach(el => el.hidden = !el.dataset.show.split(" ").includes(mode));
+  $("modeTag").textContent = { local: "· este dispositivo", monitor: "· monitor PC", camera: "· cámara remota" }[mode];
+  $("startOverlay").hidden = mode !== "local";
+  $("pairOverlay").hidden = true;
+  if (mode !== "camera" && window.innerWidth >= 1000) $("app").classList.add("panel-open");
+  video.style.opacity = 1;
+  updateRunButton(); renderShots();
+  setStatus(mode === "camera" ? "" : "Listo");
+}
+function goHome() {
+  stopLoop(); stopStream(); destroyPeer();
+  video.srcObject = null; S.remoteInfo = null;
+  try { S.wakeLock?.release(); } catch {} S.wakeLock = null;
+  $("toast").hidden = true; $("phoneFeedback").hidden = true;
+  $("app").hidden = true; $("home").hidden = false; S.mode = null;
+  history.replaceState(null, "", location.pathname);
+}
+function updateRunButton() {
+  const b = $("btnRun");
+  if (S.mode === "monitor") b.textContent = S.running ? "⏸ Pausar análisis" : "▶ Reanudar análisis";
+  else b.textContent = S.running ? "■ Detener" : "▶ Iniciar";
+}
+
+document.querySelectorAll(".mode").forEach(btn => btn.addEventListener("click", () => {
+  const mode = btn.dataset.mode;
+  if (mode === "camera") { $("joinBox").hidden = false; $("joinCode").focus(); return; }
+  enterApp(mode);
+  if (mode === "monitor") startMonitor();
+  else ensureModels().catch(() => {});
+}));
+$("joinBtn").onclick = () => startCameraMode($("joinCode").value);
+$("joinCode").addEventListener("keydown", e => { if (e.key === "Enter") startCameraMode($("joinCode").value); });
+$("startBtn").onclick = startLocal;
+$("btnRun").onclick = () => {
+  if (S.mode === "local") return S.running ? stopLocal() : startLocal();
+  if (S.mode === "monitor") {
+    if (S.running) { stopLoop(); setStatus("Análisis en pausa", "warn"); }
+    else if (video.srcObject) { startLoop(); setStatus("Analizando video del celular"); }
+  }
+};
+$("btnSwitch").onclick = async () => {
+  if (S.mode === "monitor") return sendToCamera({ type: "switch" });
+  if (S.mode === "camera") return reopenPhoneCamera(S.facing === "user" ? "environment" : "user");
+  S.facing = S.facing === "user" ? "environment" : "user";
+  if (S.stream) await restartLocalCamera();
+  else setStatus(S.facing === "user" ? "Cámara frontal seleccionada" : "Cámara trasera seleccionada");
+};
+$("btnPair").onclick = () => { $("pairOverlay").hidden = false; };
+$("pairClose").onclick = () => { $("pairOverlay").hidden = true; };
+$("pairNew").onclick = () => createMonitorPeer(randomCode());
+$("btnPanel").onclick = () => $("app").classList.toggle("panel-open");
+$("panelClose").onclick = () => $("app").classList.remove("panel-open");
+$("btnHidePreview").onclick = () => {
+  const hide = video.style.opacity !== "0"; video.style.opacity = hide ? "0" : "1";
+  $("btnHidePreview").textContent = hide ? "👁 Mostrar vista" : "🌙 Ocultar vista";
+};
+$("btnFull").onclick = () => {
+  const el = document.documentElement;
+  if (document.fullscreenElement || document.webkitFullscreenElement) (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+  else if (el.requestFullscreen) el.requestFullscreen().catch(() => {});
+  else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+  else $("app").classList.remove("panel-open");   // iPhone: no hay fullscreen de página, se oculta el panel
+};
+$("btnHome").onclick = goHome;
+$("reconnectBtn").onclick = () => S.stream ? connectToMonitor() : startCameraMode(S.roomCode);
+
+/* ---------- Arranque ---------- */
+if (!navigator.mediaDevices?.getUserMedia) {
+  document.querySelector(".sub").textContent = "⚠ Este navegador no permite usar la cámara. Abre la página en Safari o Chrome mediante HTTPS.";
+}
+const params = new URLSearchParams(location.search);
+if (params.get("mode") === "camera") {
+  $("joinBox").hidden = false;
+  $("joinCode").value = (params.get("room") || "").toUpperCase();
+} else if (params.get("mode") === "monitor") {
+  enterApp("monitor"); startMonitor();
+}
+renderShots();
+</script>
+</body>
+</html>
