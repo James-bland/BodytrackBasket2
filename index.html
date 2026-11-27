@@ -12,7 +12,7 @@
   <style>
     :root {
       --bg:#0f0617; --panel:#170a22; --card:#21122f; --line:#3d2455; --txt:#ffffff; --muted:#c9afd8;
-      --orange:#ff3926; --green:#2ee58d; --red:#ff6a7a; --blue:#4cc2ff; --yellow:#ffd447; --purple:#ffe315; --kelsi:'Kelsi',Georgia,'Segoe UI',serif;
+      --orange:#ff3926; --green:#2ee58d; --red:#ff6a7a; --blue:#4cc2ff; --yellow:#ffd447; --purple:#f191ff; --kelsi:'Kelsi',Georgia,'Segoe UI',serif;
     }
     * { box-sizing: border-box; }
     [hidden] { display: none !important; }
@@ -497,7 +497,7 @@ const DEG = 180 / Math.PI;
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]));
 const todayISO = () => new Date().toISOString().slice(0,10);
 const safeJSON = (s, fb) => { try { return s ? JSON.parse(s) : fb; } catch { return fb; } };
-const ORANGE="#ff3926", GREEN="#2ee58d", BLUE="#4cc2ff", YELLOW="#ffd447", PURPLE="#ffe315", RED="#ff5666";
+const ORANGE="#ff3926", GREEN="#2ee58d", BLUE="#4cc2ff", YELLOW="#ffd447", PURPLE="#f191ff", RED="#ff5666";
 const VMIN = 0.3;
 const WASM_PATH = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm";
 const MP = "https://storage.googleapis.com/mediapipe-models/pose_landmarker";
@@ -1480,13 +1480,13 @@ const LIMITS = `<h2>Method & limitations</h2><div class="small"><ul>
 <b>Future work:</b> synchronized wrist + forearm IMUs to add angular-velocity and wrist-snap timing to this report.</div>`;
 /* ---------- coach-style report helpers (what matters most for a player) ---------- */
 const REPORT_CSS_X = `.hero{display:flex;gap:14px;align-items:stretch;margin:12px 0}.score{background:#170a22;color:#fff;border-radius:14px;padding:12px 20px;text-align:center;min-width:150px}
-.score b{font-size:48px;display:block;line-height:1;color:#ffe315}.score small{opacity:.75}.hero .kp{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;flex:1}
+.score b{font-size:48px;display:block;line-height:1;color:#f191ff}.score small{opacity:.75}.hero .kp{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;flex:1}
 .pri{border-left:5px solid #ff3926;background:#fff7f0;border-radius:8px;padding:8px 12px;margin:6px 0}.pri h3{margin:0 0 2px;font-size:14px}.pri .cue{font-weight:700;color:#c75b00;margin-top:2px}
 .str{border-left:5px solid #2ea36b;background:#f0faf5;border-radius:8px;padding:6px 12px;margin:5px 0}
 .g{margin:9px 0}.gl{display:flex;justify-content:space-between;font-size:11.5px;margin-bottom:3px}.bar{position:relative;height:12px;background:#e8ecf3;border-radius:6px}
 .band{position:absolute;top:0;bottom:0;background:#bfe9d3;border-radius:6px}.mk{position:absolute;top:-3px;width:5px;height:18px;border-radius:3px;background:#170a22}
 .mk.ok{background:#0d8a4e}.mk.near{background:#b58900}.mk.adjust{background:#c0392b}.pgbreak{page-break-before:always;height:0}
-.focus{background:#170a22;color:#fff;border-radius:12px;padding:10px 14px;margin-top:12px}.focus b{color:#ffe315}.warnbox{background:#fff4d6;border:1px solid #e8c25a;border-radius:8px;padding:6px 10px;margin:8px 0;font-size:12px}`;
+.focus{background:#170a22;color:#fff;border-radius:12px;padding:10px 14px;margin-top:12px}.focus b{color:#f191ff}.warnbox{background:#fff4d6;border:1px solid #e8c25a;border-radius:8px;padding:6px 10px;margin:8px 0;font-size:12px}`;
 const SHORT = { kneePP:"Knee dip depth", kneeVelPeak:"Leg-drive speed", kneeRP:"Leg extension at release", hipPP:"Hip hinge at the dip", hipRP:"Hip extension at release",
   elbowPP:"Elbow angle at the set point", elbowRP:"Arm extension at release", elbowVelPeak:"Arm speed", comVelPeak:"Body-lift speed", trunkRP:"Upright trunk at release",
   releaseHeightRatio:"Release height", forearmPP:"Forearm angle at the set point" };
